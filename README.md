@@ -2,29 +2,100 @@
 
 A modern reverse engineering tool built on Ghidra with an Electron GUI.
 
+---
+
 ## Quick Start
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/): Required for the Electron GUI
-- [Java 11+](https://adoptium.net/): Required for Ghidra
+- [Node.js](https://nodejs.org/) (for the Electron GUI)
+- [Java 11+](https://adoptium.net/) (for Ghidra)
 - Windows 10/11 (Linux support coming soon)
+- Python 3 (for backend scripts)
 
-### One-Click Setup and Use
+---
 
-1. Clone or download this repository
-2. Run `run_aethere.bat [optional_binary_file_path]`
-   - On first run, this will automatically download and set up Ghidra
-   - If you provide a binary file path, it will analyze the binary before starting the GUI
-   - Otherwise, it will just start the GUI where you can load previously analyzed binaries
+### Setup
 
-```bash
-# To just start the GUI:
-run_aethere.bat
+1. **Clone or download this repository**
+2. **Install Node.js dependencies for the frontend:**
+   ```sh
+   cd frontend
+   npm install
+   ```
+3. **(First time only) Download and set up Ghidra:**
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -Command "& {& '.\scripts\setup_ghidra.ps1'}"
+   ```
+   This will download Ghidra and set up the required directories.
 
-# To analyze a binary and start the GUI:
-run_aethere.bat C:\path\to\your\binary.exe
+---
+
+### Running the App
+
+1. **Start the app:**
+   ```sh
+   npm run start
+   ```
+   or run the batch file:
+   ```sh
+   run_aethere.bat
+   ```
+
+2. **Using the GUI:**
+   - Click "Load File" to upload a binary (`.exe`, `.dll`, `.bin`) or a previously generated JSON file.
+   - If you upload a binary, the app will analyze it using Ghidra and show a real-time progress bar.
+   - Once analysis is complete, functions and their details will be displayed in the GUI.
+
+---
+
+### How It Works
+
+- When you upload a binary, the app runs Ghidra headless analysis in the background.
+- Progress is shown in real time as functions are analyzed.
+- When finished, the extracted function data is displayed in the Electron GUI.
+- You can also load a previously analyzed JSON file.
+
+---
+
+### Project Structure
+
 ```
+AetherRE/
+├── frontend/           # Electron GUI application
+├── scripts/            # Batch and Python scripts for Ghidra automation
+├── data/               # Extracted function data (JSON)
+├── tools/              # Downloaded tools (Ghidra)
+├── temp/               # Temporary Ghidra project files
+└── config.json         # Project configuration
+```
+
+---
+
+### Troubleshooting
+
+- **Progress bar not updating:**  
+  Ensure you have Python 3 installed and that your Ghidra scripts are up to date.
+- **Java not found:**  
+  Make sure Java 11+ is installed and in your PATH.
+- **Ghidra not found:**  
+  Run the setup script or manually extract Ghidra to `tools/ghidra`.
+
+---
+
+### Advanced
+
+- You can run the Ghidra headless analysis manually:
+  ```sh
+  scripts\run_ghidra_headless.bat -binary C:\path\to\your\binary.exe
+  ```
+- The output JSON will be placed in the `data/` directory.
+
+---
+
+## License
+
+MIT License
 
 ## Project Structure
 
