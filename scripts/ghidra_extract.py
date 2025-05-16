@@ -59,16 +59,25 @@ def run():
     # Extract functions
     print("[+] Extracting functions...")
     functions = []
+    total_functions = currentProgram.getFunctionManager().getFunctionCount()
+    processed = 0
+    
     for func in currentProgram.getFunctionManager().getFunctions(True):
+        # Get pseudocode for the function
+        pseudocode = get_pseudocode(func)
+        
         func_data = {
             "name": func.getName(),
             "address": str(func.getEntryPoint()),
             "size": func.getBody().getNumAddresses(),
-            "signature": func.getSignature().toString()
+            "signature": func.getSignature().toString(),
+            "pseudocode": pseudocode
         }
         functions.append(func_data)
-        if len(functions) % 10 == 0:
-            print("[+] Processed {} functions...".format(len(functions)))
+        
+        processed += 1
+        if processed % 10 == 0:
+            print("[+] Processed {}/{} functions...".format(processed, total_functions))
     
     # Write to JSON file
     output_file = os.path.join(data_dir, "{}_functions.json".format(program_name))
