@@ -1,0 +1,281 @@
+/* Reset and base styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  color: #e0e0e0;
+  background-color: #1e1e1e;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* App container */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* App header */
+.app-header {
+  background-color: #2d2d2d;
+  padding: 10px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #3d3d3d;
+}
+
+.app-header h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #61dafb;
+}
+
+.current-file {
+  font-size: 0.9rem;
+  color: #cccccc;
+  margin-left: 10px;
+  font-weight: normal;
+}
+
+.action-button {
+  background-color: #0078d4;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s ease;
+}
+
+.action-button:hover {
+  background-color: #106ebe;
+}
+
+/* Main content */
+.main-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 300px;
+  background-color: #252526;
+  border-right: 1px solid #3d3d3d;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.function-list-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 15px;
+}
+
+.function-list-container h2 {
+  font-size: 1.1rem;
+  margin-bottom: 15px;
+  color: #cccccc;
+}
+
+#function-search {
+  margin-bottom: 15px;
+}
+
+#function-filter {
+  width: 100%;
+  padding: 8px 10px;
+  background-color: #3c3c3c;
+  border: 1px solid #3d3d3d;
+  border-radius: 4px;
+  color: #e0e0e0;
+  font-size: 0.9rem;
+}
+
+#function-filter:focus {
+  outline: none;
+  border-color: #0078d4;
+}
+
+#function-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.function-item {
+  padding: 8px 10px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s ease;
+}
+
+.function-item:hover {
+  background-color: #2a2d2e;
+}
+
+.function-item.selected {
+  background-color: #37373d;
+  border-left: 3px solid #0078d4;
+}
+
+.no-functions {
+  color: #888;
+  font-style: italic;
+  padding: 10px;
+  text-align: center;
+}
+
+/* Content area */
+.content-area {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.function-info-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 20px;
+}
+
+.function-header {
+  margin-bottom: 20px;
+}
+
+#function-name {
+  font-size: 1.3rem;
+  margin-bottom: 5px;
+  color: #ffffff;
+}
+
+.address {
+  font-family: 'Consolas', 'Courier New', monospace;
+  color: #888888;
+  font-size: 0.9rem;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid #3d3d3d;
+  margin-bottom: 20px;
+}
+
+.tab-button {
+  background: none;
+  border: none;
+  color: #cccccc;
+  padding: 10px 15px;
+  margin-right: 5px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  border-bottom: 2px solid transparent;
+}
+
+.tab-button:hover {
+  color: #ffffff;
+}
+
+.tab-button.active {
+  color: #ffffff;
+  border-bottom-color: #0078d4;
+}
+
+.tab-content {
+  flex: 1;
+  overflow: hidden;
+}
+
+.tab-pane {
+  display: none;
+  height: 100%;
+  overflow: auto;
+}
+
+.tab-pane.active {
+  display: block;
+}
+
+/* Pseudocode editor */
+#pseudocode-editor {
+  height: 100%;
+  border: 1px solid #3d3d3d;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+table th, table td {
+  text-align: left;
+  padding: 10px;
+  border-bottom: 1px solid #3d3d3d;
+}
+
+table th {
+  background-color: #2d2d2d;
+  color: #cccccc;
+  font-weight: 600;
+}
+
+/* Xref lists */
+.xref-section {
+  margin-bottom: 20px;
+}
+
+.xref-section h3 {
+  font-size: 1rem;
+  margin-bottom: 10px;
+  color: #cccccc;
+}
+
+.xref-section ul {
+  list-style: none;
+}
+
+.xref-section li {
+  padding: 8px 10px;
+  border-bottom: 1px solid #3d3d3d;
+  cursor: pointer;
+}
+
+.xref-section li:hover {
+  background-color: #2a2d2e;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555555;
+} 

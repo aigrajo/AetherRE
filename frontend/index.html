@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AetherRE</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <h1>AetherRE</h1>
+      <button id="load-file-btn" class="action-button">Load Binary Analysis</button>
+    </header>
+    
+    <div class="main-content">
+      <div class="sidebar">
+        <div class="function-list-container">
+          <h2>Functions</h2>
+          <div id="function-search">
+            <input type="text" id="function-filter" placeholder="Search functions...">
+          </div>
+          <div id="function-list"></div>
+        </div>
+      </div>
+      
+      <div class="content-area">
+        <div class="function-info-container">
+          <div class="function-header">
+            <h2 id="function-name">No function selected</h2>
+            <div id="function-address" class="address"></div>
+          </div>
+          
+          <div class="tabs">
+            <button class="tab-button active" data-tab="pseudocode">Pseudocode</button>
+            <button class="tab-button" data-tab="variables">Variables</button>
+            <button class="tab-button" data-tab="xrefs">Cross-References</button>
+            <button class="tab-button" data-tab="strings">Strings</button>
+          </div>
+          
+          <div class="tab-content">
+            <div id="pseudocode-tab" class="tab-pane active">
+              <div id="pseudocode-editor"></div>
+            </div>
+            <div id="variables-tab" class="tab-pane">
+              <table id="variables-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Parameter</th>
+                    <th>Stack</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div id="xrefs-tab" class="tab-pane">
+              <div class="xref-section">
+                <h3>Calls Made</h3>
+                <ul id="calls-made-list"></ul>
+              </div>
+              <div class="xref-section">
+                <h3>Called By</h3>
+                <ul id="called-by-list"></ul>
+              </div>
+            </div>
+            <div id="strings-tab" class="tab-pane">
+              <table id="strings-table">
+                <thead>
+                  <tr>
+                    <th>Address</th>
+                    <th>Value</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html> 
