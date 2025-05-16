@@ -5,12 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AetherRE</title>
   <link rel="stylesheet" href="styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/loader.min.js"></script>
 </head>
 <body>
   <div class="app-container">
     <header class="app-header">
       <h1>AetherRE</h1>
-      <button id="load-file-btn" class="action-button">Load Binary Analysis</button>
+      <div class="file-actions">
+        <input type="file" id="file-input" accept=".exe,.dll,.bin,.json" style="display: none;">
+        <button id="load-file-btn" class="action-button">Load File</button>
+      </div>
+      <div id="analysis-progress" class="progress-container" style="display: none;">
+        <div class="progress-bar">
+          <div class="progress-fill"></div>
+        </div>
+        <div class="progress-text">Analyzing binary...</div>
+      </div>
     </header>
     
     <div class="main-content">

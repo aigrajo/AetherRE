@@ -1,8 +1,3 @@
-// Import Monaco Editor
-const path = require('path');
-const amdLoader = require('./node_modules/monaco-editor/min/vs/loader');
-const amdRequire = amdLoader.require;
-
 // Global variables
 let monacoEditor = null;
 let functionsData = null;
@@ -11,6 +6,10 @@ let currentFilePath = null;
 
 // DOM Elements
 const loadFileBtn = document.getElementById('load-file-btn');
+const fileInput = document.getElementById('file-input');
+const progressContainer = document.getElementById('analysis-progress');
+const progressFill = document.querySelector('.progress-fill');
+const progressText = document.querySelector('.progress-text');
 const functionList = document.getElementById('function-list');
 const functionFilter = document.getElementById('function-filter');
 const functionNameEl = document.getElementById('function-name');
@@ -21,58 +20,103 @@ const appTitle = document.querySelector('.app-header h1');
 
 // Initialize Monaco Editor
 function initMonacoEditor() {
-  amdRequire(['vs/editor/editor.main'], function() {
-    monacoEditor = monaco.editor.create(document.getElementById('pseudocode-editor'), {
-      value: '// Load a binary analysis file to view pseudocode',
-      language: 'cpp',
-      theme: 'vs-dark',
-      readOnly: true,
-      minimap: {
-        enabled: true
-      },
-      scrollBeyondLastLine: false,
-      automaticLayout: true,
-      fontSize: 14,
-      fontFamily: "'Consolas', 'Courier New', monospace",
-      renderLineHighlight: 'all'
+  // Load Monaco from CDN
+  const script = document.createElement('script');
+  script.src = 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/loader.min.js';
+  script.onload = () => {
+    require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs' }});
+    require(['vs/editor/editor.main'], function() {
+      monacoEditor = monaco.editor.create(document.getElementById('pseudocode-editor'), {
+        value: '// Load a binary analysis file to view pseudocode',
+        language: 'cpp',
+        theme: 'vs-dark',
+        readOnly: true,
+        minimap: {
+          enabled: true
+        },
+        scrollBeyondLastLine: false,
+        automaticLayout: true,
+        fontSize: 14,
+        fontFamily: "'Consolas', 'Courier New', monospace",
+        renderLineHighlight: 'all'
+      });
+      
+      // Resize editor when window resizes
+      window.addEventListener('resize', () => {
+        if (monacoEditor) {
+          monacoEditor.layout();
+        }
+      });
     });
-    
-    // Resize editor when window resizes
-    window.addEventListener('resize', () => {
-      if (monacoEditor) {
-        monacoEditor.layout();
-      }
-    });
-  });
+  };
+  document.head.appendChild(script);
 }
 
-// Configure AMD loader for Monaco
-amdRequire.config({
-  baseUrl: path.join(__dirname, 'node_modules/monaco-editor/min')
-});
+// Initialize file handling
+function initFileHandling() {
+  loadFileBtn.addEventListener('click', () => {
+    fileInput.click();
+  });
 
-// Load JSON file with function data
-async function loadFunctionData() {
-  try {
-    const result = await window.api.loadJsonFile();
-    if (result) {
-      functionsData = result.data;
-      currentFilePath = result.path;
-      
-      // Update the UI with filename
-      updateUIWithFile(result.filename);
-      
-      // Render the function list
-      renderFunctionList(functionsData);
+  fileInput.addEventListener('change', async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const isBinary = !file.name.endsWith('.json');
+    
+    try {
+      if (!window.api) {
+        throw new Error('API not available - please restart the application');
+      }
+
+      if (isBinary) {
+        // Show progress bar for binary analysis
+        progressContainer.style.display = 'block';
+        progressFill.style.width = '0%';
+        progressText.textContent = 'Starting analysis...';
+
+        // Start binary analysis
+        const result = await window.api.analyzeBinary(file.path, (progress) => {
+          // Update progress bar
+          progressFill.style.width = `${progress}%`;
+          progressText.textContent = `Analyzing binary... ${progress}%`;
+        });
+
+        // Hide progress bar
+        progressContainer.style.display = 'none';
+        
+        if (result) {
+          functionsData = result.data;
+          currentFilePath = result.path;
+          updateUIWithFile(result.filename);
+          renderFunctionList(functionsData);
+        }
+      } else {
+        // Load JSON file directly
+        const result = await window.api.loadJsonFile(file.path);
+        if (result) {
+          functionsData = result.data;
+          currentFilePath = result.path;
+          updateUIWithFile(result.filename);
+          renderFunctionList(functionsData);
+        }
+      }
+    } catch (error) {
+      console.error('Error processing file:', error);
+      progressContainer.style.display = 'none';
+      // Show error to user
+      alert(`Error processing file: ${error.message}`);
     }
-  } catch (error) {
-    console.error('Error loading function data:', error);
-  }
+  });
 }
 
 // Check if there are any recent analyses
 async function checkRecentAnalyses() {
   try {
+    if (!window.api) {
+      console.warn('API not available - skipping recent analyses check');
+      return;
+    }
     const files = await window.api.getAnalysisFiles();
     if (files.length > 0) {
       // Could display recent files here or auto-load the most recent
@@ -266,8 +310,6 @@ function switchTab(tabName) {
 }
 
 // Event listeners
-loadFileBtn.addEventListener('click', loadFunctionData);
-
 functionFilter.addEventListener('input', (event) => {
   filterFunctions(event.target.value);
 });
@@ -278,13 +320,12 @@ tabButtons.forEach(button => {
   });
 });
 
-// Initialize application
-document.addEventListener('DOMContentLoaded', () => {
-  // Set app version if available
-  if (window.api.version) {
-    document.title = `AetherRE v${window.api.version}`;
-  }
-  
+// Initialize the application
+function init() {
   initMonacoEditor();
+  initFileHandling();
   checkRecentAnalyses();
-}); 
+}
+
+// Start the application
+init(); 

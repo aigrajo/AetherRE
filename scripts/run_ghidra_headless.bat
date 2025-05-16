@@ -49,10 +49,18 @@ if not defined BINARY (
     exit /b 1
 )
 
-:: Convert relative binary path to absolute path
-if not "!BINARY:~0,1!"=="\" if not "!BINARY:~0,2!"=="\\" (
+:: Convert relative binary path to absolute path only if not already absolute (does not contain ':')
+echo Binary before normalization: !BINARY!
+echo.
+echo Checking if binary path is absolute...
+echo !BINARY! | findstr /C:":" >nul
+if errorlevel 1 (
     set "BINARY=%PROJECT_ROOT%!BINARY!"
+    echo Binary was relative, converted to: !BINARY!
+) else (
+    echo Binary is absolute, using as-is: !BINARY!
 )
+echo.
 
 :: Verify binary exists
 if not exist "!BINARY!" (
@@ -76,11 +84,12 @@ echo "%GHIDRA_HOME%\support\analyzeHeadless.bat" "%PROJECT_DIR%" %PROJECT_NAME% 
 echo.
 echo Output directory: %OUTPUT_DIR%
 
-:: Pause for review
-pause
+echo [PROGRESS] 20
 
 :: Run headless analysis
 set "GHIDRA_OUTPUT_DIR=%OUTPUT_DIR%"
 "%GHIDRA_HOME%\support\analyzeHeadless.bat" "%PROJECT_DIR%" %PROJECT_NAME% -import "!BINARY!" -overwrite -scriptPath "%SCRIPT_DIR%" -postScript ghidra_extract.py -deleteProject
+
+echo [PROGRESS] 80
 
 endlocal

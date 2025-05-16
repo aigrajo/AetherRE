@@ -76,6 +76,9 @@ def run():
         functions.append(func_data)
         
         processed += 1
+        # Emit progress for every function
+        print("[PROGRESS] {}/{}".format(processed, total_functions))
+        sys.stdout.flush()
         if processed % 10 == 0:
             print("[+] Processed {}/{} functions...".format(processed, total_functions))
     
