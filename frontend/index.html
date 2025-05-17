@@ -66,13 +66,67 @@
               </table>
             </div>
             <div id="xrefs-tab" class="tab-pane">
-              <div class="xref-section">
-                <h3>Calls Made</h3>
-                <ul id="calls-made-list"></ul>
+              <div class="xref-controls">
+                <div class="xref-filters">
+                  <select id="xref-direction-filter">
+                    <option value="all">All References</option>
+                    <option value="incoming">Incoming</option>
+                    <option value="outgoing">Outgoing</option>
+                  </select>
+                  <select id="xref-type-filter">
+                    <option value="all">All Types</option>
+                    <option value="direct">Direct Calls</option>
+                    <option value="indirect">Indirect Calls</option>
+                    <option value="jump">Jumps</option>
+                    <option value="data">Data References</option>
+                    <option value="import">Import/Export</option>
+                  </select>
+                </div>
+                <div class="xref-sort">
+                  <select id="xref-sort-by">
+                    <option value="name">Sort by Name</option>
+                    <option value="address">Sort by Address</option>
+                    <option value="count">Sort by Reference Count</option>
+                  </select>
+                </div>
               </div>
-              <div class="xref-section">
-                <h3>Called By</h3>
-                <ul id="called-by-list"></ul>
+              
+              <div class="xref-sections">
+                <div class="xref-section">
+                  <h3>Incoming References</h3>
+                  <div class="xref-list-container">
+                    <table id="incoming-xrefs-table">
+                      <thead>
+                        <tr>
+                          <th>Function</th>
+                          <th>Type</th>
+                          <th>Offset</th>
+                          <th>Context</th>
+                          <th>Stack State</th>
+                        </tr>
+                      </thead>
+                      <tbody></tbody>
+                    </table>
+                  </div>
+                </div>
+                
+                <div class="xref-section">
+                  <h3>Outgoing References</h3>
+                  <div class="xref-list-container">
+                    <table id="outgoing-xrefs-table">
+                      <thead>
+                        <tr>
+                          <th>Function</th>
+                          <th>Type</th>
+                          <th>Offset</th>
+                          <th>Context</th>
+                          <th>Stack State</th>
+                        </tr>
+                      </thead>
+                      <tbody></tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             </div>
             <div id="strings-tab" class="tab-pane">

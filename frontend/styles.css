@@ -407,4 +407,108 @@ table th {
   color: #bbb;
   text-align: center;
   font-family: inherit;
+}
+
+/* Cross References Tab Styles */
+.xref-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+  background-color: var(--bg-secondary);
+  border-radius: 4px;
+}
+
+.xref-filters {
+  display: flex;
+  gap: 1rem;
+}
+
+.xref-filters select,
+.xref-sort select {
+  padding: 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.xref-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.xref-section {
+  background-color: var(--bg-secondary);
+  border-radius: 4px;
+  padding: 1rem;
+}
+
+.xref-section h3 {
+  margin: 0 0 1rem 0;
+  color: var(--text-primary);
+  font-size: 1.1rem;
+}
+
+.xref-list-container {
+  overflow-x: auto;
+}
+
+#incoming-xrefs-table,
+#outgoing-xrefs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+#incoming-xrefs-table th,
+#outgoing-xrefs-table th {
+  text-align: left;
+  padding: 0.75rem;
+  background-color: var(--bg-primary);
+  border-bottom: 2px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+#incoming-xrefs-table td,
+#outgoing-xrefs-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+#incoming-xrefs-table tr:hover,
+#outgoing-xrefs-table tr:hover {
+  background-color: var(--bg-hover);
+  cursor: pointer;
+}
+
+.xref-type {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.xref-type.direct { background-color: #4CAF50; color: white; }
+.xref-type.indirect { background-color: #2196F3; color: white; }
+.xref-type.jump { background-color: #FF9800; color: white; }
+.xref-type.data { background-color: #9C27B0; color: white; }
+.xref-type.import { background-color: #607D8B; color: white; }
+
+.xref-context {
+  font-family: monospace;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.xref-stack-state {
+  font-family: monospace;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  white-space: pre-wrap;
 } 

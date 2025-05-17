@@ -9,6 +9,7 @@ import os
 import json
 import sys
 import time
+from ghidra.program.model.symbol import RefType
 
 # Simplified function to get pseudocode
 def get_pseudocode(function):
@@ -25,6 +26,41 @@ def get_pseudocode(function):
     except:
         pass
     return "// Error decompiling function"
+
+def extract_instructions(func):
+    instructions = []
+    listing = currentProgram.getListing()
+    for instr in listing.getInstructions(func.getBody(), True):
+        instr_data = {
+            "address": str(instr.getAddress()),
+            "offset": int(instr.getAddress().getOffset() - func.getEntryPoint().getOffset()),
+            "disassembly": instr.toString(),
+            "type": None,
+        }
+        # Check for calls and jumps
+        if instr.getFlowType().isCall():
+            instr_data["type"] = "call"
+            if instr.getFlows():
+                targets = instr.getFlows()
+                if len(targets) == 1:
+                    instr_data["target"] = str(targets[0])
+                else:
+                    instr_data["indirect"] = True
+        elif instr.getFlowType().isJump():
+            instr_data["type"] = "jump"
+            if instr.getFlows():
+                targets = instr.getFlows()
+                if len(targets) == 1:
+                    instr_data["target"] = str(targets[0])
+        # Data references
+        refs = instr.getReferencesFrom()
+        for ref in refs:
+            if ref.getReferenceType().isData():
+                instr_data["type"] = "data"
+                instr_data["target"] = str(ref.getToAddress())
+        if instr_data["type"]:
+            instructions.append(instr_data)
+    return instructions
 
 # Main function
 def run():
@@ -65,13 +101,14 @@ def run():
     for func in currentProgram.getFunctionManager().getFunctions(True):
         # Get pseudocode for the function
         pseudocode = get_pseudocode(func)
-        
+        instructions = extract_instructions(func)
         func_data = {
             "name": func.getName(),
             "address": str(func.getEntryPoint()),
             "size": func.getBody().getNumAddresses(),
             "signature": func.getSignature().toString(),
-            "pseudocode": pseudocode
+            "pseudocode": pseudocode,
+            "instructions": instructions
         }
         functions.append(func_data)
         

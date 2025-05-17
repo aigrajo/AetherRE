@@ -87,18 +87,20 @@ function initFileHandling() {
         
         if (result) {
           functionsData = result.data;
+          window.currentData = functionsData;
           currentFilePath = result.path;
           updateUIWithFile(result.filename);
-          renderFunctionList(functionsData);
+          renderFunctionList(functionsData.functions);
         }
       } else {
         // Load JSON file directly
         const result = await window.api.loadJsonFile(file.path);
         if (result) {
           functionsData = result.data;
+          window.currentData = functionsData;
           currentFilePath = result.path;
           updateUIWithFile(result.filename);
-          renderFunctionList(functionsData);
+          renderFunctionList(functionsData.functions);
         }
       }
     } catch (error) {
@@ -174,10 +176,10 @@ function renderFunctionList(functions) {
 
 // Filter functions based on search term
 function filterFunctions(searchTerm) {
-  if (!functionsData) return;
+  if (!functionsData || !functionsData.functions) return;
   
   searchTerm = searchTerm.toLowerCase();
-  const filteredFunctions = functionsData.filter(func => 
+  const filteredFunctions = functionsData.functions.filter(func => 
     func.name.toLowerCase().includes(searchTerm)
   );
   
@@ -187,6 +189,7 @@ function filterFunctions(searchTerm) {
 // Display the selected function's information
 function displayFunctionInfo(func) {
   currentFunction = func;
+  window.currentFunction = func;  // Ensure it's also set on window
   
   // Update function info header
   functionNameEl.textContent = func.name;
@@ -217,63 +220,7 @@ function displayFunctionInfo(func) {
   }
   
   // Update xrefs tab
-  const callsMadeList = document.getElementById('calls-made-list');
-  const calledByList = document.getElementById('called-by-list');
-  
-  callsMadeList.innerHTML = '';
-  calledByList.innerHTML = '';
-  
-  if (func.xrefs) {
-    if (func.xrefs.calls_made && func.xrefs.calls_made.length > 0) {
-      func.xrefs.calls_made.forEach(call => {
-        const li = document.createElement('li');
-        li.textContent = `${call.name} (${call.address})`;
-        
-        // Add click handler to jump to the called function
-        li.addEventListener('click', () => {
-          if (functionsData) {
-            const calledFunc = functionsData.find(f => f.address === call.address);
-            if (calledFunc) {
-              const funcElement = document.querySelector(`.function-item[data-address="${call.address}"]`);
-              if (funcElement) {
-                funcElement.click();
-                funcElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              }
-            }
-          }
-        });
-        
-        callsMadeList.appendChild(li);
-      });
-    } else {
-      callsMadeList.innerHTML = '<li>No calls made</li>';
-    }
-    
-    if (func.xrefs.called_by && func.xrefs.called_by.length > 0) {
-      func.xrefs.called_by.forEach(caller => {
-        const li = document.createElement('li');
-        li.textContent = `${caller.name} (${caller.address})`;
-        
-        // Add click handler to jump to the calling function
-        li.addEventListener('click', () => {
-          if (functionsData) {
-            const callingFunc = functionsData.find(f => f.address === caller.address);
-            if (callingFunc) {
-              const funcElement = document.querySelector(`.function-item[data-address="${caller.address}"]`);
-              if (funcElement) {
-                funcElement.click();
-                funcElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              }
-            }
-          }
-        });
-        
-        calledByList.appendChild(li);
-      });
-    } else {
-      calledByList.innerHTML = '<li>Not called by any function</li>';
-    }
-  }
+  updateXRefsTab(func);
   
   // Update string references tab
   const stringsTable = document.querySelector('#strings-table tbody');
@@ -309,22 +256,344 @@ function switchTab(tabName) {
   }
 }
 
+// Fix tab switching
+// First create the wrapped version
+const originalSwitchTab = switchTab;
+window.switchTab = function(tabName) {
+  console.log('Switching to tab:', tabName);
+  // Use direct DOM queries to update tab highlighting
+  document.querySelectorAll('.tab-button').forEach(button => {
+    button.classList.toggle('active', button.dataset.tab === tabName);
+  });
+  
+  document.querySelectorAll('.tab-pane').forEach(pane => {
+    pane.classList.toggle('active', pane.id === `${tabName}-tab`);
+  });
+  
+  // Refresh editor layout when switching to pseudocode tab
+  if (tabName === 'pseudocode' && monacoEditor) {
+    setTimeout(() => monacoEditor.layout(), 0);
+  }
+  
+  // If switching to xrefs tab, force update
+  if (tabName === 'xrefs' && window.currentFunction) {
+    console.log('Force updating xrefs tab for:', window.currentFunction);
+    updateXRefsTab(window.currentFunction);
+  }
+};
+
 // Event listeners
 functionFilter.addEventListener('input', (event) => {
   filterFunctions(event.target.value);
 });
 
-tabButtons.forEach(button => {
-  button.addEventListener('click', () => {
-    switchTab(button.dataset.tab);
-  });
+// Update event listeners and selectFunction override to pass the function object
+// ... rest of the file ...
+// In selectFunction, pass the function object to updateXRefsTab
+const originalSelectFunction = window.selectFunction;
+window.selectFunction = function(functionObj) {
+    originalSelectFunction(functionObj);
+    updateXRefsTab(functionObj);
+};
+// In event listeners, use currentFunction (which is a function object)
+document.getElementById('xref-direction-filter').addEventListener('change', () => {
+    if (window.currentFunction) {
+        updateXRefsTab(window.currentFunction);
+    }
 });
+document.getElementById('xref-type-filter').addEventListener('change', () => {
+    if (window.currentFunction) {
+        updateXRefsTab(window.currentFunction);
+    }
+});
+document.getElementById('xref-sort-by').addEventListener('change', () => {
+    if (window.currentFunction) {
+        updateXRefsTab(window.currentFunction);
+    }
+});
+
+// Cross References Tab Functions
+function updateXRefsTab(functionObj) {
+    console.log('updateXRefsTab called with:', functionObj);
+    
+    if (!functionObj) {
+        console.error('No function object provided to updateXRefsTab');
+        return;
+    }
+    
+    // Get the tables
+    const incomingTable = document.getElementById('incoming-xrefs-table').getElementsByTagName('tbody')[0];
+    const outgoingTable = document.getElementById('outgoing-xrefs-table').getElementsByTagName('tbody')[0];
+    
+    // Clear existing rows
+    incomingTable.innerHTML = '';
+    outgoingTable.innerHTML = '';
+    
+    // Try to find the cross_references data in various places
+    let xrefs = null;
+    let dataSources = [
+        window.currentData?.cross_references,
+        functionsData?.cross_references,
+        window?.cross_references
+    ];
+    
+    for (const source of dataSources) {
+        if (source && source.incoming && source.outgoing) {
+            xrefs = source;
+            console.log('Found xrefs data source:', source);
+            break;
+        }
+    }
+    
+    if (!xrefs) {
+        console.error('No cross_references data found in any data source');
+        incomingTable.innerHTML = '<tr><td colspan="5">No cross-reference data available</td></tr>';
+        outgoingTable.innerHTML = '<tr><td colspan="5">No cross-reference data available</td></tr>';
+        return;
+    }
+    
+    // Get function address in various formats to try matching
+    const addressFormats = [];
+    if (functionObj.address) {
+        // Try original format
+        addressFormats.push(functionObj.address);
+        
+        // Try with/without 0x prefix
+        if (functionObj.address.startsWith('0x')) {
+            addressFormats.push(functionObj.address.substring(2));
+        } else {
+            addressFormats.push('0x' + functionObj.address);
+        }
+        
+        // Try lowercase/uppercase
+        addressFormats.push(functionObj.address.toLowerCase());
+        addressFormats.push(functionObj.address.toUpperCase());
+    }
+    
+    console.log('Trying address formats:', addressFormats);
+    console.log('Available incoming keys:', Object.keys(xrefs.incoming));
+    console.log('Available outgoing keys:', Object.keys(xrefs.outgoing));
+    
+    // Find matching refs using any of the address formats
+    let incomingRefs = [];
+    let outgoingRefs = [];
+    
+    for (const addr of addressFormats) {
+        if (xrefs.incoming[addr] && xrefs.incoming[addr].length > 0) {
+            incomingRefs = xrefs.incoming[addr];
+            console.log(`Found ${incomingRefs.length} incoming refs using address format: ${addr}`);
+            break;
+        }
+    }
+    
+    for (const addr of addressFormats) {
+        if (xrefs.outgoing[addr] && xrefs.outgoing[addr].length > 0) {
+            outgoingRefs = xrefs.outgoing[addr];
+            console.log(`Found ${outgoingRefs.length} outgoing refs using address format: ${addr}`);
+            break;
+        }
+    }
+    
+    // If we still didn't find any refs, try iterating over all refs
+    if (incomingRefs.length === 0) {
+        console.log('Trying brute force approach for incoming refs...');
+        const funcName = functionObj.name?.toLowerCase();
+        
+        if (funcName) {
+            for (const [addr, refs] of Object.entries(xrefs.incoming)) {
+                for (const ref of refs) {
+                    if (ref.target_func?.toLowerCase() === funcName || 
+                        ref.source_func?.toLowerCase() === funcName) {
+                        incomingRefs = refs;
+                        console.log(`Found incoming refs by name match: ${funcName}`);
+                        break;
+                    }
+                }
+                if (incomingRefs.length > 0) break;
+            }
+        }
+    }
+    
+    if (outgoingRefs.length === 0) {
+        console.log('Trying brute force approach for outgoing refs...');
+        const funcName = functionObj.name?.toLowerCase();
+        
+        if (funcName) {
+            for (const [addr, refs] of Object.entries(xrefs.outgoing)) {
+                for (const ref of refs) {
+                    if (ref.target_func?.toLowerCase() === funcName || 
+                        ref.source_func?.toLowerCase() === funcName) {
+                        outgoingRefs = refs;
+                        console.log(`Found outgoing refs by name match: ${funcName}`);
+                        break;
+                    }
+                }
+                if (outgoingRefs.length > 0) break;
+            }
+        }
+    }
+    
+    console.log('Final incoming refs count:', incomingRefs.length);
+    console.log('Final outgoing refs count:', outgoingRefs.length);
+    
+    // Apply filters
+    const directionFilter = document.getElementById('xref-direction-filter').value;
+    const typeFilter = document.getElementById('xref-type-filter').value;
+    const sortBy = document.getElementById('xref-sort-by').value;
+    
+    // Filter and sort incoming references
+    let filteredIncoming = incomingRefs.filter(ref => {
+        if (directionFilter !== 'all' && directionFilter !== 'incoming') return false;
+        if (typeFilter !== 'all' && ref.type !== typeFilter) return false;
+        return true;
+    });
+    
+    // Filter and sort outgoing references
+    let filteredOutgoing = outgoingRefs.filter(ref => {
+        if (directionFilter !== 'all' && directionFilter !== 'outgoing') return false;
+        if (typeFilter !== 'all' && ref.type !== typeFilter) return false;
+        return true;
+    });
+    
+    // Sort references with error handling
+    const sortReferences = (refs) => {
+        try {
+            return refs.sort((a, b) => {
+                switch (sortBy) {
+                    case 'name':
+                        return (a.source_func || '').localeCompare(b.source_func || '');
+                    case 'address':
+                        return (a.offset || 0) - (b.offset || 0);
+                    case 'count':
+                        return refs.filter(r => r.source_func === b.source_func).length -
+                               refs.filter(r => r.source_func === a.source_func).length;
+                    default:
+                        return 0;
+                }
+            });
+        } catch (err) {
+            console.error('Error sorting references:', err);
+            return refs;
+        }
+    };
+    
+    try {
+        filteredIncoming = sortReferences(filteredIncoming);
+        filteredOutgoing = sortReferences(filteredOutgoing);
+    } catch (err) {
+        console.error('Error in sort:', err);
+    }
+    
+    // Populate tables
+    if (filteredIncoming.length === 0) {
+        incomingTable.innerHTML = '<tr><td colspan="5">No incoming references found</td></tr>';
+    } else {
+        filteredIncoming.forEach(ref => {
+            try {
+                const row = incomingTable.insertRow();
+                row.innerHTML = `
+                    <td>${ref.source_func || 'Unknown'}</td>
+                    <td><span class="xref-type ${ref.type || 'unknown'}">${ref.type || 'Unknown'}</span></td>
+                    <td>${(ref.offset || 0).toString(16)}</td>
+                    <td class="xref-context">${ref.context || ''}</td>
+                    <td class="xref-stack-state">${ref.stack_state || ''}</td>
+                `;
+                row.addEventListener('click', () => {
+                    // Handle click safely
+                    try {
+                        if (functionsData && functionsData.functions) {
+                            const func = functionsData.functions.find(f => 
+                                f.address === ref.source_func || f.name === ref.source_func);
+                            if (func) selectFunction(func);
+                        }
+                    } catch (err) {
+                        console.error('Error handling row click:', err);
+                    }
+                });
+            } catch (err) {
+                console.error('Error creating incoming reference row:', err);
+            }
+        });
+    }
+    
+    if (filteredOutgoing.length === 0) {
+        outgoingTable.innerHTML = '<tr><td colspan="5">No outgoing references found</td></tr>';
+    } else {
+        filteredOutgoing.forEach(ref => {
+            try {
+                const row = outgoingTable.insertRow();
+                row.innerHTML = `
+                    <td>${ref.target_func || 'Unknown'}</td>
+                    <td><span class="xref-type ${ref.type || 'unknown'}">${ref.type || 'Unknown'}</span></td>
+                    <td>${(ref.offset || 0).toString(16)}</td>
+                    <td class="xref-context">${ref.context || ''}</td>
+                    <td class="xref-stack-state">${ref.stack_state || ''}</td>
+                `;
+                row.addEventListener('click', () => {
+                    // Handle click safely
+                    try {
+                        if (functionsData && functionsData.functions) {
+                            const func = functionsData.functions.find(f => 
+                                f.address === ref.target_func || f.name === ref.target_func);
+                            if (func) selectFunction(func);
+                        }
+                    } catch (err) {
+                        console.error('Error handling row click:', err);
+                    }
+                });
+            } catch (err) {
+                console.error('Error creating outgoing reference row:', err);
+            }
+        });
+    }
+}
 
 // Initialize the application
 function init() {
   initMonacoEditor();
   initFileHandling();
   checkRecentAnalyses();
+  setupTabSwitching();
+}
+
+// Setup tab switching with our wrapped version
+function setupTabSwitching() {
+  // Create wrapped version of switchTab
+  const originalSwitchTab = switchTab;
+  window.switchTab = function(tabName) {
+    console.log('Switching to tab:', tabName);
+    // Directly update DOM
+    document.querySelectorAll('.tab-button').forEach(button => {
+      button.classList.toggle('active', button.dataset.tab === tabName);
+    });
+    
+    document.querySelectorAll('.tab-pane').forEach(pane => {
+      pane.classList.toggle('active', pane.id === `${tabName}-tab`);
+    });
+    
+    // Refresh editor layout when switching to pseudocode tab
+    if (tabName === 'pseudocode' && monacoEditor) {
+      setTimeout(() => monacoEditor.layout(), 0);
+    }
+    
+    // If switching to xrefs tab, force update
+    if (tabName === 'xrefs' && window.currentFunction) {
+      console.log('Force updating xrefs tab for:', window.currentFunction);
+      updateXRefsTab(window.currentFunction);
+    }
+  };
+  
+  // Replace all tab button listeners
+  document.querySelectorAll('.tab-button').forEach(button => {
+    // Clone and replace to remove old listeners
+    const newButton = button.cloneNode(true);
+    button.parentNode.replaceChild(newButton, button);
+    
+    // Add new listener with wrapped function
+    newButton.addEventListener('click', () => {
+      window.switchTab(newButton.dataset.tab);
+    });
+  });
 }
 
 // Start the application

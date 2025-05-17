@@ -123,15 +123,40 @@ ipcMain.handle('load-json-file', async (event, defaultFolder) => {
     try {
       const filePath = result.filePaths[0];
       const fileContent = fs.readFileSync(filePath, 'utf8');
-      
-      // Remember this directory for next time
       app.lastDirectory = path.dirname(filePath);
-      
-      return {
-        data: JSON.parse(fileContent),
-        path: filePath,
-        filename: path.basename(filePath)
-      };
+      // Send JSON to backend for xref computation
+      const backendProcess = getBackendProcess();
+      const backendResult = await new Promise((resolve, reject) => {
+        let stdoutBuffer = '';
+        const stdoutHandler = (data) => {
+          const chunk = data.toString();
+          stdoutBuffer += chunk;
+          while (true) {
+            const newlineIndex = stdoutBuffer.indexOf('\n');
+            if (newlineIndex === -1) break;
+            const message = stdoutBuffer.slice(0, newlineIndex);
+            stdoutBuffer = stdoutBuffer.slice(newlineIndex + 1);
+            try {
+              const data = JSON.parse(message);
+              if (data.type === 'analysis_complete') {
+                backendProcess.removeListener('data', stdoutHandler);
+                resolve({
+                  data: data.data,
+                  path: filePath,
+                  filename: path.basename(filePath)
+                });
+              } else if (data.type === 'error') {
+                backendProcess.removeListener('data', stdoutHandler);
+                reject(new Error(data.message));
+              }
+            } catch (e) {}
+          }
+        };
+        backendProcess.stdout.on('data', stdoutHandler);
+        const message = JSON.stringify({ type: 'analyze_json', json: fileContent });
+        backendProcess.stdin.write(message + '\n');
+      });
+      return backendResult;
     } catch (error) {
       console.error('Error loading JSON file:', error);
       return null;
