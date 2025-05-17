@@ -4,6 +4,37 @@ let functionsData = null;
 let currentFunction = null;
 let currentFilePath = null;
 
+// Helper functions
+function getFunctionName(addressOrName) {
+    if (!addressOrName) return null;
+    if (!functionsData || !functionsData.functions) return addressOrName;
+    
+    // First try to find by exact address match
+    const func = functionsData.functions.find(f => f.address === addressOrName);
+    if (func) return func.name;
+    
+    // Try with/without 0x prefix
+    const normalizedAddr = addressOrName.startsWith('0x') ? 
+        addressOrName.substring(2) : 
+        '0x' + addressOrName;
+    const funcByNormalizedAddr = functionsData.functions.find(f => 
+        f.address === normalizedAddr || 
+        f.address === normalizedAddr.toLowerCase() || 
+        f.address === normalizedAddr.toUpperCase()
+    );
+    if (funcByNormalizedAddr) return funcByNormalizedAddr.name;
+    
+    // If not found by address, check if it's already a name
+    const funcByName = functionsData.functions.find(f => 
+        f.name === addressOrName || 
+        f.name.toLowerCase() === addressOrName.toLowerCase()
+    );
+    if (funcByName) return funcByName.name;
+    
+    // If we can't find it, return the original value
+    return addressOrName;
+}
+
 // DOM Elements
 const loadFileBtn = document.getElementById('load-file-btn');
 const fileInput = document.getElementById('file-input');
@@ -492,18 +523,22 @@ function updateXRefsTab(functionObj) {
             try {
                 const row = incomingTable.insertRow();
                 row.innerHTML = `
+                    <td class="xref-name">${getFunctionName(ref.source_func) || 'Unknown'}</td>
                     <td>${ref.source_func || 'Unknown'}</td>
-                    <td><span class="xref-type ${ref.type || 'unknown'}">${ref.type || 'Unknown'}</span></td>
                     <td>${(ref.offset || 0).toString(16)}</td>
                     <td class="xref-context">${ref.context || ''}</td>
-                    <td class="xref-stack-state">${ref.stack_state || ''}</td>
                 `;
                 row.addEventListener('click', () => {
                     // Handle click safely
                     try {
                         if (functionsData && functionsData.functions) {
                             const func = functionsData.functions.find(f => 
-                                f.address === ref.source_func || f.name === ref.source_func);
+                                f.address === ref.source_func || 
+                                f.name === ref.source_func ||
+                                f.address === (ref.source_func.startsWith('0x') ? 
+                                    ref.source_func.substring(2) : 
+                                    '0x' + ref.source_func)
+                            );
                             if (func) selectFunction(func);
                         }
                     } catch (err) {
@@ -523,18 +558,22 @@ function updateXRefsTab(functionObj) {
             try {
                 const row = outgoingTable.insertRow();
                 row.innerHTML = `
+                    <td class="xref-name">${getFunctionName(ref.target_func) || 'Unknown'}</td>
                     <td>${ref.target_func || 'Unknown'}</td>
-                    <td><span class="xref-type ${ref.type || 'unknown'}">${ref.type || 'Unknown'}</span></td>
                     <td>${(ref.offset || 0).toString(16)}</td>
                     <td class="xref-context">${ref.context || ''}</td>
-                    <td class="xref-stack-state">${ref.stack_state || ''}</td>
                 `;
                 row.addEventListener('click', () => {
                     // Handle click safely
                     try {
                         if (functionsData && functionsData.functions) {
                             const func = functionsData.functions.find(f => 
-                                f.address === ref.target_func || f.name === ref.target_func);
+                                f.address === ref.target_func || 
+                                f.name === ref.target_func ||
+                                f.address === (ref.target_func.startsWith('0x') ? 
+                                    ref.target_func.substring(2) : 
+                                    '0x' + ref.target_func)
+                            );
                             if (func) selectFunction(func);
                         }
                     } catch (err) {
