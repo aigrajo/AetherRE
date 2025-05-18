@@ -318,38 +318,48 @@ table th {
   font-family: inherit;
 }
 
-.xref-item, .xref-section li {
-  display: inline-block;
-  background: #232323;
-  color: #fff;
-  border-radius: 0;
-  padding: 6px 14px;
-  margin: 3px 8px 3px 0;
-  font-family: inherit;
-  font-size: 1rem;
+/* Xref table styles */
+#incoming-xrefs-table tr,
+#outgoing-xrefs-table tr {
   cursor: pointer;
-  transition: background 0.18s, color 0.18s, box-shadow 0.18s, border 0.18s;
-  box-shadow: none;
-  border: 1.5px solid #333;
-  text-decoration: none;
+  transition: background-color 0.2s ease;
 }
 
-.xref-item:hover, .xref-section li:hover {
-  background: #111112;
+#incoming-xrefs-table tr:hover,
+#outgoing-xrefs-table tr:hover {
+  background-color: #2a2a2a;
+}
+
+#incoming-xrefs-table tr.selected,
+#outgoing-xrefs-table tr.selected {
+  background-color: #3a3a3a;
+}
+
+.xref-link {
   color: #fff;
-  border: 1.5px solid #fff;
-  box-shadow: 0 0 8px 2px #fff2;
-  text-shadow: 0 0 2px #fff, 0 0 8px #fff1;
+  text-decoration: none;
+  transition: color 0.2s ease;
 }
 
-.no-xrefs, .xref-section .no-xrefs, .xref-section li.no-xrefs {
-  color: #888;
-  font-style: italic;
-  padding: 8px 12px;
-  background: none;
-  border: none;
-  box-shadow: none;
-  font-family: inherit;
+.xref-link:hover {
+  color: #66d9ef;
+  text-decoration: underline;
+}
+
+.xref-address {
+  font-family: monospace;
+  color: #a6e22e;
+}
+
+.xref-offset {
+  font-family: monospace;
+  color: #fd971f;
+}
+
+.xref-context {
+  font-family: monospace;
+  color: #e6db74;
+  font-size: 0.9rem;
 }
 
 /* Scrollbars */
@@ -499,12 +509,6 @@ table th {
 .xref-type.jump { background-color: #FF9800; color: white; }
 .xref-type.data { background-color: #9C27B0; color: white; }
 .xref-type.import { background-color: #607D8B; color: white; }
-
-.xref-context {
-  font-family: monospace;
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-}
 
 .xref-stack-state {
   font-family: monospace;

@@ -343,6 +343,68 @@ document.getElementById('xref-sort-by').addEventListener('change', () => {
     }
 });
 
+// Helper function to find function by address or name
+function findFunction(addressOrName) {
+    if (!functionsData || !functionsData.functions) return null;
+    
+    // Try exact match first
+    let func = functionsData.functions.find(f => 
+        f.address === addressOrName || 
+        f.name === addressOrName
+    );
+    
+    if (func) return func;
+    
+    // Try with/without 0x prefix
+    const normalizedAddr = addressOrName.startsWith('0x') ? 
+        addressOrName.substring(2) : 
+        '0x' + addressOrName;
+    
+    func = functionsData.functions.find(f => 
+        f.address === normalizedAddr || 
+        f.address === normalizedAddr.toLowerCase() || 
+        f.address === normalizedAddr.toUpperCase()
+    );
+    
+    if (func) return func;
+    
+    // Try case-insensitive name match
+    return functionsData.functions.find(f => 
+        f.name.toLowerCase() === addressOrName.toLowerCase()
+    );
+}
+
+// Helper function to handle xref row clicks
+function handleXRefRowClick(row, targetFunc, event) {
+    // If the click was on a link, prevent default behavior
+    if (event && event.target.classList.contains('xref-link')) {
+        event.preventDefault();
+    }
+    
+    // Add visual feedback
+    const allRows = document.querySelectorAll('#incoming-xrefs-table tr, #outgoing-xrefs-table tr');
+    allRows.forEach(r => r.classList.remove('selected'));
+    row.classList.add('selected');
+    
+    // Find and navigate to the function
+    const func = findFunction(targetFunc);
+    if (func) {
+        // Update function list selection
+        const functionItems = document.querySelectorAll('.function-item');
+        functionItems.forEach(item => item.classList.remove('selected'));
+        const functionItem = document.querySelector(`.function-item[data-address="${func.address}"]`);
+        if (functionItem) {
+            functionItem.classList.add('selected');
+            functionItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        
+        // Update function display
+        displayFunctionInfo(func);
+    } else {
+        console.warn('Could not find function:', targetFunc);
+    }
+}
+
 // Cross References Tab Functions
 function updateXRefsTab(functionObj) {
     console.log('updateXRefsTab called with:', functionObj);
@@ -386,24 +448,15 @@ function updateXRefsTab(functionObj) {
     // Get function address in various formats to try matching
     const addressFormats = [];
     if (functionObj.address) {
-        // Try original format
         addressFormats.push(functionObj.address);
-        
-        // Try with/without 0x prefix
         if (functionObj.address.startsWith('0x')) {
             addressFormats.push(functionObj.address.substring(2));
         } else {
             addressFormats.push('0x' + functionObj.address);
         }
-        
-        // Try lowercase/uppercase
         addressFormats.push(functionObj.address.toLowerCase());
         addressFormats.push(functionObj.address.toUpperCase());
     }
-    
-    console.log('Trying address formats:', addressFormats);
-    console.log('Available incoming keys:', Object.keys(xrefs.incoming));
-    console.log('Available outgoing keys:', Object.keys(xrefs.outgoing));
     
     // Find matching refs using any of the address formats
     let incomingRefs = [];
@@ -412,7 +465,6 @@ function updateXRefsTab(functionObj) {
     for (const addr of addressFormats) {
         if (xrefs.incoming[addr] && xrefs.incoming[addr].length > 0) {
             incomingRefs = xrefs.incoming[addr];
-            console.log(`Found ${incomingRefs.length} incoming refs using address format: ${addr}`);
             break;
         }
     }
@@ -420,52 +472,9 @@ function updateXRefsTab(functionObj) {
     for (const addr of addressFormats) {
         if (xrefs.outgoing[addr] && xrefs.outgoing[addr].length > 0) {
             outgoingRefs = xrefs.outgoing[addr];
-            console.log(`Found ${outgoingRefs.length} outgoing refs using address format: ${addr}`);
             break;
         }
     }
-    
-    // If we still didn't find any refs, try iterating over all refs
-    if (incomingRefs.length === 0) {
-        console.log('Trying brute force approach for incoming refs...');
-        const funcName = functionObj.name?.toLowerCase();
-        
-        if (funcName) {
-            for (const [addr, refs] of Object.entries(xrefs.incoming)) {
-                for (const ref of refs) {
-                    if (ref.target_func?.toLowerCase() === funcName || 
-                        ref.source_func?.toLowerCase() === funcName) {
-                        incomingRefs = refs;
-                        console.log(`Found incoming refs by name match: ${funcName}`);
-                        break;
-                    }
-                }
-                if (incomingRefs.length > 0) break;
-            }
-        }
-    }
-    
-    if (outgoingRefs.length === 0) {
-        console.log('Trying brute force approach for outgoing refs...');
-        const funcName = functionObj.name?.toLowerCase();
-        
-        if (funcName) {
-            for (const [addr, refs] of Object.entries(xrefs.outgoing)) {
-                for (const ref of refs) {
-                    if (ref.target_func?.toLowerCase() === funcName || 
-                        ref.source_func?.toLowerCase() === funcName) {
-                        outgoingRefs = refs;
-                        console.log(`Found outgoing refs by name match: ${funcName}`);
-                        break;
-                    }
-                }
-                if (outgoingRefs.length > 0) break;
-            }
-        }
-    }
-    
-    console.log('Final incoming refs count:', incomingRefs.length);
-    console.log('Final outgoing refs count:', outgoingRefs.length);
     
     // Apply filters
     const directionFilter = document.getElementById('xref-direction-filter').value;
@@ -486,13 +495,13 @@ function updateXRefsTab(functionObj) {
         return true;
     });
     
-    // Sort references with error handling
+    // Sort references
     const sortReferences = (refs) => {
         try {
             return refs.sort((a, b) => {
                 switch (sortBy) {
                     case 'name':
-                        return (a.source_func || '').localeCompare(b.source_func || '');
+                        return (getFunctionName(a.source_func) || '').localeCompare(getFunctionName(b.source_func) || '');
                     case 'address':
                         return (a.offset || 0) - (b.offset || 0);
                     case 'count':
@@ -508,12 +517,8 @@ function updateXRefsTab(functionObj) {
         }
     };
     
-    try {
-        filteredIncoming = sortReferences(filteredIncoming);
-        filteredOutgoing = sortReferences(filteredOutgoing);
-    } catch (err) {
-        console.error('Error in sort:', err);
-    }
+    filteredIncoming = sortReferences(filteredIncoming);
+    filteredOutgoing = sortReferences(filteredOutgoing);
     
     // Populate tables
     if (filteredIncoming.length === 0) {
@@ -522,29 +527,18 @@ function updateXRefsTab(functionObj) {
         filteredIncoming.forEach(ref => {
             try {
                 const row = incomingTable.insertRow();
+                const name = getFunctionName(ref.source_func) || 'Unknown';
                 row.innerHTML = `
-                    <td class="xref-name">${getFunctionName(ref.source_func) || 'Unknown'}</td>
-                    <td>${ref.source_func || 'Unknown'}</td>
-                    <td>${(ref.offset || 0).toString(16)}</td>
+                    <td class="xref-name"><a href="#" class="xref-link">${name}</a></td>
+                    <td class="xref-address">${ref.source_func || 'Unknown'}</td>
+                    <td class="xref-offset">${(ref.offset || 0).toString(16)}</td>
                     <td class="xref-context">${ref.context || ''}</td>
                 `;
-                row.addEventListener('click', () => {
-                    // Handle click safely
-                    try {
-                        if (functionsData && functionsData.functions) {
-                            const func = functionsData.functions.find(f => 
-                                f.address === ref.source_func || 
-                                f.name === ref.source_func ||
-                                f.address === (ref.source_func.startsWith('0x') ? 
-                                    ref.source_func.substring(2) : 
-                                    '0x' + ref.source_func)
-                            );
-                            if (func) selectFunction(func);
-                        }
-                    } catch (err) {
-                        console.error('Error handling row click:', err);
-                    }
-                });
+                
+                // Add click handlers
+                const link = row.querySelector('.xref-link');
+                link.addEventListener('click', (e) => handleXRefRowClick(row, ref.source_func, e));
+                row.addEventListener('click', (e) => handleXRefRowClick(row, ref.source_func, e));
             } catch (err) {
                 console.error('Error creating incoming reference row:', err);
             }
@@ -557,29 +551,18 @@ function updateXRefsTab(functionObj) {
         filteredOutgoing.forEach(ref => {
             try {
                 const row = outgoingTable.insertRow();
+                const name = getFunctionName(ref.target_func) || 'Unknown';
                 row.innerHTML = `
-                    <td class="xref-name">${getFunctionName(ref.target_func) || 'Unknown'}</td>
-                    <td>${ref.target_func || 'Unknown'}</td>
-                    <td>${(ref.offset || 0).toString(16)}</td>
+                    <td class="xref-name"><a href="#" class="xref-link">${name}</a></td>
+                    <td class="xref-address">${ref.target_func || 'Unknown'}</td>
+                    <td class="xref-offset">${(ref.offset || 0).toString(16)}</td>
                     <td class="xref-context">${ref.context || ''}</td>
                 `;
-                row.addEventListener('click', () => {
-                    // Handle click safely
-                    try {
-                        if (functionsData && functionsData.functions) {
-                            const func = functionsData.functions.find(f => 
-                                f.address === ref.target_func || 
-                                f.name === ref.target_func ||
-                                f.address === (ref.target_func.startsWith('0x') ? 
-                                    ref.target_func.substring(2) : 
-                                    '0x' + ref.target_func)
-                            );
-                            if (func) selectFunction(func);
-                        }
-                    } catch (err) {
-                        console.error('Error handling row click:', err);
-                    }
-                });
+                
+                // Add click handlers
+                const link = row.querySelector('.xref-link');
+                link.addEventListener('click', (e) => handleXRefRowClick(row, ref.target_func, e));
+                row.addEventListener('click', (e) => handleXRefRowClick(row, ref.target_func, e));
             } catch (err) {
                 console.error('Error creating outgoing reference row:', err);
             }
