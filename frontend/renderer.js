@@ -86,6 +86,8 @@ function initMonacoEditor() {
 
 // Initialize file handling
 function initFileHandling() {
+  const appHeader = document.querySelector('.app-header');
+  
   loadFileBtn.addEventListener('click', () => {
     fileInput.click();
   });
@@ -105,8 +107,9 @@ function initFileHandling() {
         // Store original binary name
         originalBinaryName = file.name;
         
-        // Show progress bar for binary analysis
-        progressContainer.style.display = 'block';
+        // Show progress bar and hide load button
+        progressContainer.style.display = 'flex';
+        appHeader.classList.add('analyzing');
         progressFill.style.width = '0%';
         progressText.textContent = 'Starting analysis...';
 
@@ -117,14 +120,15 @@ function initFileHandling() {
           progressText.textContent = `Analyzing binary... ${progress}%`;
         });
 
-        // Hide progress bar
+        // Hide progress bar and show load button
         progressContainer.style.display = 'none';
+        appHeader.classList.remove('analyzing');
         
         if (result) {
           functionsData = result.data;
           window.currentData = functionsData;
           currentFilePath = result.path;
-          updateUIWithFile(originalBinaryName); // Use original binary name
+          updateUIWithFile(originalBinaryName);
           renderFunctionList(functionsData.functions);
         }
       } else {
@@ -136,7 +140,6 @@ function initFileHandling() {
           currentFilePath = result.path;
           
           // Try to get original binary name from the analysis data
-          // Assuming the data might have a metadata field with the original name
           originalBinaryName = functionsData.metadata?.originalBinary || 
                              functionsData.originalBinary ||
                              file.name.replace('.json', '');
@@ -148,6 +151,7 @@ function initFileHandling() {
     } catch (error) {
       console.error('Error processing file:', error);
       progressContainer.style.display = 'none';
+      appHeader.classList.remove('analyzing');
       // Show error to user
       alert(`Error processing file: ${error.message}`);
     }
