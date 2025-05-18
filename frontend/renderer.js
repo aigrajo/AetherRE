@@ -332,11 +332,6 @@ document.getElementById('xref-direction-filter').addEventListener('change', () =
         updateXRefsTab(window.currentFunction);
     }
 });
-document.getElementById('xref-type-filter').addEventListener('change', () => {
-    if (window.currentFunction) {
-        updateXRefsTab(window.currentFunction);
-    }
-});
 document.getElementById('xref-sort-by').addEventListener('change', () => {
     if (window.currentFunction) {
         updateXRefsTab(window.currentFunction);
@@ -429,9 +424,11 @@ function updateXRefsTab(functionObj) {
         return;
     }
     
-    // Get the tables
+    // Get the tables and sections
     const incomingTable = document.getElementById('incoming-xrefs-table').getElementsByTagName('tbody')[0];
     const outgoingTable = document.getElementById('outgoing-xrefs-table').getElementsByTagName('tbody')[0];
+    const incomingSection = document.querySelector('.xref-section:nth-child(1)');
+    const outgoingSection = document.querySelector('.xref-section:nth-child(2)');
     
     // Clear existing rows
     incomingTable.innerHTML = '';
@@ -493,32 +490,28 @@ function updateXRefsTab(functionObj) {
     
     // Apply filters
     const directionFilter = document.getElementById('xref-direction-filter').value;
-    const typeFilter = document.getElementById('xref-type-filter').value;
     const sortBy = document.getElementById('xref-sort-by').value;
     
-    // Filter references
-    let filteredIncoming = incomingRefs.filter(ref => {
-        if (directionFilter !== 'all' && directionFilter !== 'incoming') return false;
-        if (typeFilter !== 'all' && ref.type !== typeFilter) return false;
-        return true;
-    });
-    
-    let filteredOutgoing = outgoingRefs.filter(ref => {
-        if (directionFilter !== 'all' && directionFilter !== 'outgoing') return false;
-        if (typeFilter !== 'all' && ref.type !== typeFilter) return false;
-        return true;
-    });
-    
-    // Group references by function
-    const groupedIncoming = groupReferencesByFunction(filteredIncoming);
-    const groupedOutgoing = groupReferencesByFunction(filteredOutgoing);
+    // Show/hide sections based on direction filter
+    incomingSection.style.display = (directionFilter === 'all' || directionFilter === 'incoming') ? 'block' : 'none';
+    outgoingSection.style.display = (directionFilter === 'all' || directionFilter === 'outgoing') ? 'block' : 'none';
     
     // Sort references
-    const sortReferences = (refs, grouped) => {
+    const sortReferences = (refs, isOutgoing = false) => {
         try {
-            return refs.sort((a, b) => {
-                const aAddr = a.source_func || a.target_func;
-                const bAddr = b.source_func || b.target_func;
+            return [...refs].sort((a, b) => {
+                const aAddr = isOutgoing ? a.target_func : a.source_func;
+                const bAddr = isOutgoing ? b.target_func : b.source_func;
+                
+                // Group references by function for count-based sorting
+                const grouped = new Map();
+                refs.forEach(ref => {
+                    const funcAddr = isOutgoing ? ref.target_func : ref.source_func;
+                    if (!grouped.has(funcAddr)) {
+                        grouped.set(funcAddr, []);
+                    }
+                    grouped.get(funcAddr).push(ref);
+                });
                 
                 switch (sortBy) {
                     case 'name':
@@ -545,75 +538,81 @@ function updateXRefsTab(functionObj) {
             return refs;
         }
     };
+
+    // Sort references
+    const sortedIncoming = sortReferences(incomingRefs, false);
+    const sortedOutgoing = sortReferences(outgoingRefs, true);
     
-    filteredIncoming = sortReferences(filteredIncoming, groupedIncoming);
-    filteredOutgoing = sortReferences(filteredOutgoing, groupedOutgoing);
-    
-    // Populate tables
-    if (filteredIncoming.length === 0) {
-        incomingTable.innerHTML = '<tr><td colspan="5">No incoming references found</td></tr>';
-    } else {
-        let lastAddr = null;
-        filteredIncoming.forEach(ref => {
-            try {
-                const row = incomingTable.insertRow();
-                const name = getFunctionName(ref.source_func) || 'Unknown';
-                const addr = ref.source_func;
-                
-                // Add a visual separator between different functions
-                if (lastAddr && lastAddr !== addr) {
-                    row.classList.add('function-separator');
+    // Populate incoming table if visible
+    if (incomingSection.style.display !== 'none') {
+        if (sortedIncoming.length === 0) {
+            incomingTable.innerHTML = '<tr><td colspan="5">No incoming references found</td></tr>';
+        } else {
+            let lastAddr = null;
+            sortedIncoming.forEach(ref => {
+                try {
+                    const row = incomingTable.insertRow();
+                    const name = getFunctionName(ref.source_func) || 'Unknown';
+                    const addr = ref.source_func;
+                    
+                    // Add a visual separator between different functions
+                    if (lastAddr && lastAddr !== addr) {
+                        row.classList.add('function-separator');
+                    }
+                    lastAddr = addr;
+                    
+                    row.innerHTML = `
+                        <td class="xref-name"><a href="#" class="xref-link">${name}</a></td>
+                        <td class="xref-address">${addr || 'Unknown'}</td>
+                        <td class="xref-offset">${(ref.offset || 0).toString(16)}</td>
+                        <td class="xref-context">${ref.context || ''}</td>
+                    `;
+                    
+                    // Add click handlers
+                    const link = row.querySelector('.xref-link');
+                    link.addEventListener('click', (e) => handleXRefRowClick(row, ref.source_func, e));
+                    row.addEventListener('click', (e) => handleXRefRowClick(row, ref.source_func, e));
+                } catch (err) {
+                    console.error('Error creating incoming reference row:', err);
                 }
-                lastAddr = addr;
-                
-                row.innerHTML = `
-                    <td class="xref-name"><a href="#" class="xref-link">${name}</a></td>
-                    <td class="xref-address">${addr || 'Unknown'}</td>
-                    <td class="xref-offset">${(ref.offset || 0).toString(16)}</td>
-                    <td class="xref-context">${ref.context || ''}</td>
-                `;
-                
-                // Add click handlers
-                const link = row.querySelector('.xref-link');
-                link.addEventListener('click', (e) => handleXRefRowClick(row, ref.source_func, e));
-                row.addEventListener('click', (e) => handleXRefRowClick(row, ref.source_func, e));
-            } catch (err) {
-                console.error('Error creating incoming reference row:', err);
-            }
-        });
+            });
+        }
     }
     
-    if (filteredOutgoing.length === 0) {
-        outgoingTable.innerHTML = '<tr><td colspan="5">No outgoing references found</td></tr>';
-    } else {
-        let lastAddr = null;
-        filteredOutgoing.forEach(ref => {
-            try {
-                const row = outgoingTable.insertRow();
-                const name = getFunctionName(ref.target_func) || 'Unknown';
-                const addr = ref.target_func;
-                
-                // Add a visual separator between different functions
-                if (lastAddr && lastAddr !== addr) {
-                    row.classList.add('function-separator');
+    // Populate outgoing table if visible
+    if (outgoingSection.style.display !== 'none') {
+        if (sortedOutgoing.length === 0) {
+            outgoingTable.innerHTML = '<tr><td colspan="5">No outgoing references found</td></tr>';
+        } else {
+            let lastAddr = null;
+            sortedOutgoing.forEach(ref => {
+                try {
+                    const row = outgoingTable.insertRow();
+                    const name = getFunctionName(ref.target_func) || 'Unknown';
+                    const addr = ref.target_func;
+                    
+                    // Add a visual separator between different functions
+                    if (lastAddr && lastAddr !== addr) {
+                        row.classList.add('function-separator');
+                    }
+                    lastAddr = addr;
+                    
+                    row.innerHTML = `
+                        <td class="xref-name"><a href="#" class="xref-link">${name}</a></td>
+                        <td class="xref-address">${addr || 'Unknown'}</td>
+                        <td class="xref-offset">${(ref.offset || 0).toString(16)}</td>
+                        <td class="xref-context">${ref.context || ''}</td>
+                    `;
+                    
+                    // Add click handlers
+                    const link = row.querySelector('.xref-link');
+                    link.addEventListener('click', (e) => handleXRefRowClick(row, ref.target_func, e));
+                    row.addEventListener('click', (e) => handleXRefRowClick(row, ref.target_func, e));
+                } catch (err) {
+                    console.error('Error creating outgoing reference row:', err);
                 }
-                lastAddr = addr;
-                
-                row.innerHTML = `
-                    <td class="xref-name"><a href="#" class="xref-link">${name}</a></td>
-                    <td class="xref-address">${addr || 'Unknown'}</td>
-                    <td class="xref-offset">${(ref.offset || 0).toString(16)}</td>
-                    <td class="xref-context">${ref.context || ''}</td>
-                `;
-                
-                // Add click handlers
-                const link = row.querySelector('.xref-link');
-                link.addEventListener('click', (e) => handleXRefRowClick(row, ref.target_func, e));
-                row.addEventListener('click', (e) => handleXRefRowClick(row, ref.target_func, e));
-            } catch (err) {
-                console.error('Error creating outgoing reference row:', err);
-            }
-        });
+            });
+        }
     }
 }
 

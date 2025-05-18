@@ -307,15 +307,28 @@ table th {
 
 /* Xref lists */
 .xref-section {
-  margin-bottom: 18px;
+  background-color: var(--bg-secondary);
+  border-radius: 4px;
+  padding: 1rem;
+  transition: all 0.3s ease;
+  margin-bottom: 1.5rem;
 }
 
-.xref-section h3 {
-  font-size: 1.05rem;
-  margin-bottom: 8px;
-  color: #eaeaea;
-  font-weight: 600;
-  font-family: inherit;
+.xref-section:last-child {
+  margin-bottom: 0;
+}
+
+.xref-section[style*="display: none"] {
+  height: 0;
+  padding: 0;
+  margin: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.xref-section[style*="display: block"] {
+  height: auto;
+  opacity: 1;
 }
 
 /* Xref table styles */
@@ -455,18 +468,13 @@ table th {
   background-color: var(--bg-primary);
   color: var(--text-primary);
   font-size: 0.9rem;
+  min-width: 150px;
 }
 
 .xref-sections {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-}
-
-.xref-section {
-  background-color: var(--bg-secondary);
-  border-radius: 4px;
-  padding: 1rem;
 }
 
 .xref-section h3 {
