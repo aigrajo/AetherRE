@@ -405,6 +405,21 @@ function handleXRefRowClick(row, targetFunc, event) {
     }
 }
 
+// Helper function to group references by function
+function groupReferencesByFunction(refs) {
+    const grouped = new Map();
+    
+    refs.forEach(ref => {
+        const funcAddr = ref.source_func || ref.target_func;
+        if (!grouped.has(funcAddr)) {
+            grouped.set(funcAddr, []);
+        }
+        grouped.get(funcAddr).push(ref);
+    });
+    
+    return grouped;
+}
+
 // Cross References Tab Functions
 function updateXRefsTab(functionObj) {
     console.log('updateXRefsTab called with:', functionObj);
@@ -481,32 +496,46 @@ function updateXRefsTab(functionObj) {
     const typeFilter = document.getElementById('xref-type-filter').value;
     const sortBy = document.getElementById('xref-sort-by').value;
     
-    // Filter and sort incoming references
+    // Filter references
     let filteredIncoming = incomingRefs.filter(ref => {
         if (directionFilter !== 'all' && directionFilter !== 'incoming') return false;
         if (typeFilter !== 'all' && ref.type !== typeFilter) return false;
         return true;
     });
     
-    // Filter and sort outgoing references
     let filteredOutgoing = outgoingRefs.filter(ref => {
         if (directionFilter !== 'all' && directionFilter !== 'outgoing') return false;
         if (typeFilter !== 'all' && ref.type !== typeFilter) return false;
         return true;
     });
     
+    // Group references by function
+    const groupedIncoming = groupReferencesByFunction(filteredIncoming);
+    const groupedOutgoing = groupReferencesByFunction(filteredOutgoing);
+    
     // Sort references
-    const sortReferences = (refs) => {
+    const sortReferences = (refs, grouped) => {
         try {
             return refs.sort((a, b) => {
+                const aAddr = a.source_func || a.target_func;
+                const bAddr = b.source_func || b.target_func;
+                
                 switch (sortBy) {
                     case 'name':
-                        return (getFunctionName(a.source_func) || '').localeCompare(getFunctionName(b.source_func) || '');
+                        return (getFunctionName(aAddr) || '').localeCompare(getFunctionName(bAddr) || '');
                     case 'address':
+                        // First sort by address
+                        const addrCompare = aAddr.localeCompare(bAddr);
+                        if (addrCompare !== 0) return addrCompare;
+                        // Then by offset if addresses are the same
                         return (a.offset || 0) - (b.offset || 0);
                     case 'count':
-                        return refs.filter(r => r.source_func === b.source_func).length -
-                               refs.filter(r => r.source_func === a.source_func).length;
+                        // Compare by number of references to each function
+                        const aCount = grouped.get(aAddr)?.length || 0;
+                        const bCount = grouped.get(bAddr)?.length || 0;
+                        if (bCount !== aCount) return bCount - aCount;
+                        // If counts are equal, sort by offset
+                        return (a.offset || 0) - (b.offset || 0);
                     default:
                         return 0;
                 }
@@ -517,20 +546,29 @@ function updateXRefsTab(functionObj) {
         }
     };
     
-    filteredIncoming = sortReferences(filteredIncoming);
-    filteredOutgoing = sortReferences(filteredOutgoing);
+    filteredIncoming = sortReferences(filteredIncoming, groupedIncoming);
+    filteredOutgoing = sortReferences(filteredOutgoing, groupedOutgoing);
     
     // Populate tables
     if (filteredIncoming.length === 0) {
         incomingTable.innerHTML = '<tr><td colspan="5">No incoming references found</td></tr>';
     } else {
+        let lastAddr = null;
         filteredIncoming.forEach(ref => {
             try {
                 const row = incomingTable.insertRow();
                 const name = getFunctionName(ref.source_func) || 'Unknown';
+                const addr = ref.source_func;
+                
+                // Add a visual separator between different functions
+                if (lastAddr && lastAddr !== addr) {
+                    row.classList.add('function-separator');
+                }
+                lastAddr = addr;
+                
                 row.innerHTML = `
                     <td class="xref-name"><a href="#" class="xref-link">${name}</a></td>
-                    <td class="xref-address">${ref.source_func || 'Unknown'}</td>
+                    <td class="xref-address">${addr || 'Unknown'}</td>
                     <td class="xref-offset">${(ref.offset || 0).toString(16)}</td>
                     <td class="xref-context">${ref.context || ''}</td>
                 `;
@@ -548,13 +586,22 @@ function updateXRefsTab(functionObj) {
     if (filteredOutgoing.length === 0) {
         outgoingTable.innerHTML = '<tr><td colspan="5">No outgoing references found</td></tr>';
     } else {
+        let lastAddr = null;
         filteredOutgoing.forEach(ref => {
             try {
                 const row = outgoingTable.insertRow();
                 const name = getFunctionName(ref.target_func) || 'Unknown';
+                const addr = ref.target_func;
+                
+                // Add a visual separator between different functions
+                if (lastAddr && lastAddr !== addr) {
+                    row.classList.add('function-separator');
+                }
+                lastAddr = addr;
+                
                 row.innerHTML = `
                     <td class="xref-name"><a href="#" class="xref-link">${name}</a></td>
-                    <td class="xref-address">${ref.target_func || 'Unknown'}</td>
+                    <td class="xref-address">${addr || 'Unknown'}</td>
                     <td class="xref-offset">${(ref.offset || 0).toString(16)}</td>
                     <td class="xref-context">${ref.context || ''}</td>
                 `;

@@ -335,6 +335,18 @@ table th {
   background-color: #3a3a3a;
 }
 
+/* Function separator in xref tables */
+#incoming-xrefs-table tr.function-separator,
+#outgoing-xrefs-table tr.function-separator {
+  border-top: 2px solid #333;
+}
+
+/* Function separator hover effect */
+#incoming-xrefs-table tr.function-separator:hover,
+#outgoing-xrefs-table tr.function-separator:hover {
+  border-top-color: #444;
+}
+
 .xref-link {
   color: #fff;
   text-decoration: none;
