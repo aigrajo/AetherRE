@@ -170,13 +170,14 @@ body {
   height: 100%;
   padding: 20px;
   background: var(--bg-secondary);
-  margin: 16px;
-  border-radius: 6px;
-  border: 1px solid var(--border-color);
+  border-radius: 0;
+  border: none;
+  border-left: 1px solid var(--border-color);
 }
 
 .function-header {
   margin-bottom: 16px;
+  padding: 0 4px;
 }
 
 #function-name {
@@ -298,7 +299,8 @@ table th {
 
 /* Monaco Editor customization */
 .monaco-editor {
-  padding: 8px 0;
+  padding: 0;
+  border-radius: 0;
 }
 
 .monaco-editor .margin {
