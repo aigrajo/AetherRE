@@ -3,6 +3,7 @@ let monacoEditor = null;
 let functionsData = null;
 let currentFunction = null;
 let currentFilePath = null;
+let originalBinaryName = null;  // Track the original binary name
 
 // Helper functions
 function getFunctionName(addressOrName) {
@@ -101,6 +102,9 @@ function initFileHandling() {
       }
 
       if (isBinary) {
+        // Store original binary name
+        originalBinaryName = file.name;
+        
         // Show progress bar for binary analysis
         progressContainer.style.display = 'block';
         progressFill.style.width = '0%';
@@ -120,17 +124,24 @@ function initFileHandling() {
           functionsData = result.data;
           window.currentData = functionsData;
           currentFilePath = result.path;
-          updateUIWithFile(result.filename);
+          updateUIWithFile(originalBinaryName); // Use original binary name
           renderFunctionList(functionsData.functions);
         }
       } else {
-        // Load JSON file directly
+        // For JSON files, try to extract original binary name from the data
         const result = await window.api.loadJsonFile(file.path);
         if (result) {
           functionsData = result.data;
           window.currentData = functionsData;
           currentFilePath = result.path;
-          updateUIWithFile(result.filename);
+          
+          // Try to get original binary name from the analysis data
+          // Assuming the data might have a metadata field with the original name
+          originalBinaryName = functionsData.metadata?.originalBinary || 
+                             functionsData.originalBinary ||
+                             file.name.replace('.json', '');
+          
+          updateUIWithFile(originalBinaryName);
           renderFunctionList(functionsData.functions);
         }
       }
@@ -162,12 +173,13 @@ async function checkRecentAnalyses() {
 
 // Update UI elements with the current file info
 function updateUIWithFile(filename) {
-  document.title = `AetherRE - ${filename || 'No File Loaded'}`;
+  if (!filename) return;
   
-  // Only update the app title if we're displaying a file
-  if (filename) {
-    appTitle.innerHTML = `AetherRE <span class="current-file">${filename}</span>`;
-  }
+  // Clean up the filename to make it more presentable
+  const cleanName = filename.replace(/\.[^/.]+$/, ''); // Remove file extension
+  
+  document.title = `AetherRE - ${cleanName}`;
+  appTitle.innerHTML = `AetherRE <span class="current-file">${cleanName}</span>`;
 }
 
 // Render the function list
@@ -271,32 +283,16 @@ function displayFunctionInfo(func) {
   }
 }
 
-// Tab switching
+// Tab switching function
 function switchTab(tabName) {
-  tabButtons.forEach(button => {
-    button.classList.toggle('active', button.dataset.tab === tabName);
-  });
-  
-  tabPanes.forEach(pane => {
-    pane.classList.toggle('active', pane.id === `${tabName}-tab`);
-  });
-  
-  // Refresh editor layout when switching to pseudocode tab
-  if (tabName === 'pseudocode' && monacoEditor) {
-    setTimeout(() => monacoEditor.layout(), 0);
-  }
-}
-
-// Fix tab switching
-// First create the wrapped version
-const originalSwitchTab = switchTab;
-window.switchTab = function(tabName) {
   console.log('Switching to tab:', tabName);
-  // Use direct DOM queries to update tab highlighting
+  
+  // Update tab buttons
   document.querySelectorAll('.tab-button').forEach(button => {
     button.classList.toggle('active', button.dataset.tab === tabName);
   });
   
+  // Update tab panes
   document.querySelectorAll('.tab-pane').forEach(pane => {
     pane.classList.toggle('active', pane.id === `${tabName}-tab`);
   });
@@ -311,7 +307,7 @@ window.switchTab = function(tabName) {
     console.log('Force updating xrefs tab for:', window.currentFunction);
     updateXRefsTab(window.currentFunction);
   }
-};
+}
 
 // Event listeners
 functionFilter.addEventListener('input', (event) => {
@@ -624,44 +620,18 @@ function init() {
   setupTabSwitching();
 }
 
-// Setup tab switching with our wrapped version
+// Setup tab switching
 function setupTabSwitching() {
-  // Create wrapped version of switchTab
-  const originalSwitchTab = switchTab;
-  window.switchTab = function(tabName) {
-    console.log('Switching to tab:', tabName);
-    // Directly update DOM
-    document.querySelectorAll('.tab-button').forEach(button => {
-      button.classList.toggle('active', button.dataset.tab === tabName);
-    });
-    
-    document.querySelectorAll('.tab-pane').forEach(pane => {
-      pane.classList.toggle('active', pane.id === `${tabName}-tab`);
-    });
-    
-    // Refresh editor layout when switching to pseudocode tab
-    if (tabName === 'pseudocode' && monacoEditor) {
-      setTimeout(() => monacoEditor.layout(), 0);
-    }
-    
-    // If switching to xrefs tab, force update
-    if (tabName === 'xrefs' && window.currentFunction) {
-      console.log('Force updating xrefs tab for:', window.currentFunction);
-      updateXRefsTab(window.currentFunction);
-    }
-  };
-  
-  // Replace all tab button listeners
+  // Add click handlers to all tab buttons
   document.querySelectorAll('.tab-button').forEach(button => {
-    // Clone and replace to remove old listeners
-    const newButton = button.cloneNode(true);
-    button.parentNode.replaceChild(newButton, button);
-    
-    // Add new listener with wrapped function
-    newButton.addEventListener('click', () => {
-      window.switchTab(newButton.dataset.tab);
+    button.addEventListener('click', () => {
+      switchTab(button.dataset.tab);
     });
   });
+  
+  // Set initial active tab
+  const defaultTab = 'pseudocode';
+  switchTab(defaultTab);
 }
 
 // Start the application
