@@ -236,15 +236,69 @@ function filterFunctions(searchTerm) {
 // Display the selected function's information
 function displayFunctionInfo(func) {
   currentFunction = func;
-  window.currentFunction = func;  // Ensure it's also set on window
+  window.currentFunction = func;
   
   // Update function info header
   functionNameEl.textContent = func.name;
   functionAddressEl.textContent = func.address;
   
-  // Update pseudocode
+  // Update pseudocode with variable decorations
   if (monacoEditor) {
+    // Set the plain text pseudocode
     monacoEditor.setValue(func.pseudocode || '// No pseudocode available');
+    
+    // Add decorations for variables
+    if (func.local_variables) {
+      const decorations = [];
+      const model = monacoEditor.getModel();
+      
+      func.local_variables.forEach(variable => {
+        if (variable.name) {
+          // Find all occurrences of the variable name
+          const matches = model.findMatches(
+            variable.name,
+            false,
+            false,
+            true,
+            null,
+            true
+          );
+          
+          // Create decorations for each match
+          matches.forEach(match => {
+            decorations.push({
+              range: match.range,
+              options: {
+                inlineClassName: 'variable-name',
+                hoverMessage: { value: 'Click to rename variable' },
+                stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+              }
+            });
+          });
+        }
+      });
+      
+      // Apply the decorations
+      const decorationIds = monacoEditor.deltaDecorations([], decorations);
+      
+      // Add click handler for variable names
+      monacoEditor.onMouseDown(e => {
+        const position = e.target.position;
+        const decorations = monacoEditor.getLineDecorations(position.lineNumber);
+        const decoration = decorations.find(d => 
+          position.column >= d.range.startColumn && 
+          position.column <= d.range.endColumn
+        );
+        
+        if (decoration) {
+          const variableName = monacoEditor.getModel().getValueInRange(decoration.range);
+          const newName = prompt('Enter new variable name:', variableName);
+          if (newName && newName !== variableName) {
+            renameVariable(variableName, newName);
+          }
+        }
+      });
+    }
   }
   
   // Update variables tab
@@ -254,12 +308,17 @@ function displayFunctionInfo(func) {
   if (func.local_variables && func.local_variables.length > 0) {
     func.local_variables.forEach(variable => {
       const row = document.createElement('tr');
+      const nameCell = document.createElement('td');
+      nameCell.textContent = variable.name || 'unnamed';
+      makeVariableEditable(nameCell, variable.name || 'unnamed');
+      
       row.innerHTML = `
-        <td>${variable.name || 'unnamed'}</td>
+        <td></td>
         <td>${variable.type || 'unknown'}</td>
         <td>${variable.size || 'N/A'}</td>
         <td>${variable.offset || 'N/A'}</td>
       `;
+      row.firstElementChild.replaceWith(nameCell);
       variablesTable.appendChild(row);
     });
   } else {
@@ -615,6 +674,70 @@ function updateXRefsTab(functionObj) {
             });
         }
     }
+}
+
+// Add these functions after the global variables section
+function renameVariable(oldName, newName) {
+    if (!currentFunction || !oldName || !newName || oldName === newName) return;
+    
+    // Update in local_variables
+    if (currentFunction.local_variables) {
+        currentFunction.local_variables.forEach(variable => {
+            if (variable.name === oldName) {
+                variable.name = newName;
+            }
+        });
+    }
+    
+    // Update in pseudocode
+    if (currentFunction.pseudocode) {
+        // Create a regex that matches the variable name as a whole word
+        const regex = new RegExp(`\\b${oldName}\\b`, 'g');
+        currentFunction.pseudocode = currentFunction.pseudocode.replace(regex, newName);
+    }
+    
+    // Update the display
+    displayFunctionInfo(currentFunction);
+}
+
+function makeVariableEditable(element, variableName) {
+    element.classList.add('editable');
+    element.title = 'Click to rename variable';
+    
+    element.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = variableName;
+        input.className = 'variable-rename-input';
+        
+        // Replace the text with input
+        element.textContent = '';
+        element.appendChild(input);
+        input.focus();
+        
+        // Select all text
+        input.setSelectionRange(0, input.value.length);
+        
+        const finishEditing = () => {
+            const newName = input.value.trim();
+            if (newName && newName !== variableName) {
+                renameVariable(variableName, newName);
+            }
+            element.textContent = newName || variableName;
+        };
+        
+        input.addEventListener('blur', finishEditing);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                finishEditing();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                element.textContent = variableName;
+            }
+        });
+    });
 }
 
 // Initialize the application

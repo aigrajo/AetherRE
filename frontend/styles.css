@@ -189,16 +189,21 @@ body {
   transition: all 0.2s ease;
   color: var(--text-primary);
   background: transparent;
+  text-decoration: none;
 }
 
 .function-item:hover {
   background: var(--hover-color);
+  color: #FFFFFF;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+  text-decoration: none;
 }
 
 .function-item.selected {
   background: var(--selection-color);
   color: #FFFFFF;
-  font-weight: 500;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+  text-decoration: none;
 }
 
 /* Content area */
@@ -384,15 +389,36 @@ table th {
   letter-spacing: 0.5px;
 }
 
-.xref-link {
+/* Modern clickable element styles */
+.variable-name,
+.xref-link,
+.editable {
   color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
   text-decoration: none;
-  transition: color 0.2s ease;
 }
 
-.xref-link:hover {
+.variable-name:hover,
+.xref-link:hover,
+.editable:hover {
   color: #FFFFFF;
-  text-decoration: underline;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+  text-decoration: none;
+}
+
+/* Monaco editor specific styles */
+.monaco-editor .variable-name {
+  color: var(--text-primary) !important;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none !important;
+}
+
+.monaco-editor .variable-name:hover {
+  color: #FFFFFF !important;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+  text-decoration: none !important;
 }
 
 /* Function separator in XRef tables */
@@ -474,17 +500,17 @@ table th {
 
 .xref-address {
   font-family: monospace;
-  color: #a6e22e;
+  color: var(--text-primary);
 }
 
 .xref-offset {
   font-family: monospace;
-  color: #fd971f;
+  color: var(--text-primary);
 }
 
 .xref-context {
   font-family: monospace;
-  color: #e6db74;
+  color: var(--text-primary);
   font-size: 0.9rem;
 }
 
@@ -540,4 +566,59 @@ table th {
   color: var(--text-secondary);
   font-size: 0.85rem;
   white-space: pre-wrap;
+}
+
+.variable-name {
+  color: var(--text-primary);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.variable-name:hover {
+  color: #FFFFFF;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+  text-decoration: none;
+}
+
+/* Monaco editor specific styles */
+.monaco-editor .variable-name {
+  color: var(--text-primary) !important;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none !important;
+}
+
+.monaco-editor .variable-name:hover {
+  color: #FFFFFF !important;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+  text-decoration: none !important;
+}
+
+.editable {
+  cursor: pointer;
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.editable:hover {
+  color: #FFFFFF;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+  text-decoration: none;
+}
+
+.variable-rename-input {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 2px 4px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.variable-rename-input:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.1);
 } 
