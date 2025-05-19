@@ -54,7 +54,6 @@ const appTitle = document.querySelector('.app-header h1');
 // Chat functionality
 const chatMessages = document.getElementById('chat-messages');
 const chatInput = document.getElementById('chat-input');
-const sendMessageBtn = document.getElementById('send-message');
 
 // Initialize Monaco Editor
 function initMonacoEditor() {
@@ -880,11 +879,21 @@ async function sendMessage() {
 }
 
 // Event listeners for chat
-sendMessageBtn.addEventListener('click', sendMessage);
 chatInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     sendMessage();
+  }
+});
+
+chatInput.addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = (this.scrollHeight) + 'px';
+  // Toggle at-max-height class for scrollbar
+  if (this.scrollHeight >= 144) {
+    this.classList.add('at-max-height');
+  } else {
+    this.classList.remove('at-max-height');
   }
 });
 
