@@ -114,6 +114,20 @@ def extract_local_strings(func):
     
     return strings
 
+def extract_assembly(func):
+    assembly = []
+    listing = currentProgram.getListing()
+    for instr in listing.getInstructions(func.getBody(), True):
+        asm_data = {
+            "address": str(instr.getAddress()),
+            "offset": int(instr.getAddress().getOffset() - func.getEntryPoint().getOffset()),
+            "mnemonic": instr.getMnemonicString(),
+            "operands": instr.getDefaultOperandRepresentation(0),
+            "bytes": ''.join(['%02x' % b for b in instr.getBytes()])
+        }
+        assembly.append(asm_data)
+    return assembly
+
 # Main function
 def run():
     print("[+] AetherRE Function Extractor Script")
@@ -156,6 +170,7 @@ def run():
         instructions = extract_instructions(func)
         local_vars = extract_local_variables(func)
         local_strings = extract_local_strings(func)
+        assembly = extract_assembly(func)  # Extract assembly instructions
         func_data = {
             "name": func.getName(),
             "address": str(func.getEntryPoint()),
@@ -164,7 +179,8 @@ def run():
             "pseudocode": pseudocode,
             "instructions": instructions,
             "local_variables": local_vars,
-            "local_strings": local_strings
+            "local_strings": local_strings,
+            "assembly": assembly  # Add assembly to the output
         }
         functions.append(func_data)
         

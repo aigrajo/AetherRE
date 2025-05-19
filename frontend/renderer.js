@@ -1,5 +1,6 @@
 // Global variables
 let monacoEditor = null;
+let assemblyEditor = null;  // Add assembly editor variable
 let functionsData = null;
 let currentFunction = null;
 let currentFilePath = null;
@@ -58,6 +59,7 @@ function initMonacoEditor() {
   script.onload = () => {
     require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs' }});
     require(['vs/editor/editor.main'], function() {
+      // Initialize pseudocode editor
       monacoEditor = monaco.editor.create(document.getElementById('pseudocode-editor'), {
         value: '// Load a binary analysis file to view pseudocode',
         language: 'cpp',
@@ -72,11 +74,30 @@ function initMonacoEditor() {
         fontFamily: "'Consolas', 'Courier New', monospace",
         renderLineHighlight: 'all'
       });
+
+      // Initialize assembly editor
+      assemblyEditor = monaco.editor.create(document.getElementById('assembly-editor'), {
+        value: '// Load a binary analysis file to view assembly',
+        language: 'asm',
+        theme: 'vs-dark',
+        readOnly: true,
+        minimap: {
+          enabled: true
+        },
+        scrollBeyondLastLine: false,
+        automaticLayout: true,
+        fontSize: 14,
+        fontFamily: "'Consolas', 'Courier New', monospace",
+        renderLineHighlight: 'all'
+      });
       
-      // Resize editor when window resizes
+      // Resize editors when window resizes
       window.addEventListener('resize', () => {
         if (monacoEditor) {
           monacoEditor.layout();
+        }
+        if (assemblyEditor) {
+          assemblyEditor.layout();
         }
       });
     });
@@ -280,6 +301,18 @@ function displayFunctionInfo(func) {
       // Apply the decorations
       monacoEditor.deltaDecorations([], decorations);
     }
+  }
+
+  // Update assembly view
+  if (assemblyEditor && func.assembly) {
+    // Format assembly instructions into a readable string
+    const assemblyText = func.assembly.map(instr => {
+      const offset = instr.offset.toString(16).padStart(8, '0');
+      const bytes = instr.bytes.padEnd(16, ' ');
+      return `${instr.address}  ${offset}  ${bytes}  ${instr.mnemonic} ${instr.operands}`;
+    }).join('\n');
+    
+    assemblyEditor.setValue(assemblyText || '// No assembly available');
   }
   
   // Update variables tab

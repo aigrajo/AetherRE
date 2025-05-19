@@ -278,6 +278,7 @@ body {
   flex: 1;
   overflow: hidden;
   position: relative;
+  height: 100%;
 }
 
 .tab-pane {
@@ -621,4 +622,10 @@ table th {
   outline: none;
   border-color: var(--accent-color);
   box-shadow: 0 0 8px rgba(255, 255, 255, 0.1);
+}
+
+#assembly-editor {
+  width: 100%;
+  height: 400px;
+  min-height: 300px;
 } 
