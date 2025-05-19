@@ -11,6 +11,7 @@ A modern reverse engineering plugin built on Ghidra with an Electron GUI and AI-
 The setup script will automatically check for and verify these requirements:
 
 - [Node.js](https://nodejs.org/) (v16+ for the Electron GUI)
+- [Java 11+](https://adoptium.net/) (for Ghidra)
 - [Python 3.8+](https://www.python.org/) (for backend scripts)
 - Windows 10/11 (Linux support coming soon)
 
@@ -33,11 +34,6 @@ The setup script will automatically check for and verify these requirements:
    - Install all Python dependencies
    - Install frontend dependencies
    - Create necessary directories
-
-   If any dependency is missing or outdated, the script will:
-   - Show the current version
-   - Provide a download link
-   - Exit with an error message
 
 3. **Start the application:**
    ```sh
@@ -89,22 +85,6 @@ AetherRE/
 
 ### Troubleshooting
 
-The setup script includes comprehensive error checking and will help you resolve common issues:
-
-1. **Dependency Issues:**
-   - If Python is missing or outdated: Script will show current version and provide download link
-   - If Node.js is missing or outdated: Script will show current version and provide download link
-
-2. **Installation Issues:**
-   - Virtual environment validation and repair
-   - Python package dependency checks
-   - Node.js dependency installation errors
-   - Ghidra setup problems
-
-3. **Runtime Issues:**
-   - Backend server startup problems
-   - Frontend application launch issues
-   - Ghidra analysis errors
 
 #### Manual Setup (if automatic setup fails)
 
@@ -137,11 +117,11 @@ If the automatic setup fails, you can:
 
 ### Features
 
-- Modern Electron-based GUI with resizable panels
+- Modern Electron-based GUI 
 - AI-powered analysis assistant
 - Real-time binary analysis with Ghidra
-- Cross-reference visualization
-- Function call graph generation
+- Cross-references
+
 - String and data reference analysis
 - Variable and type analysis
 - Assembly and pseudocode views
