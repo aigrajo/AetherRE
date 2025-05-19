@@ -1,6 +1,6 @@
 # AetherRE
 
-A modern reverse engineering tool built on Ghidra with an Electron GUI.
+A modern reverse engineering plugin built on Ghidra with an Electron GUI and AI-powered analysis capabilities.
 
 ---
 
@@ -8,142 +8,159 @@ A modern reverse engineering tool built on Ghidra with an Electron GUI.
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) (for the Electron GUI)
-- [Java 11+](https://adoptium.net/) (for Ghidra)
-- Windows 10/11 (Linux support coming soon)
-- Python 3 (for backend scripts)
+The setup script will automatically check for and verify these requirements:
 
----
+- [Node.js](https://nodejs.org/) (v16+ for the Electron GUI)
+- [Python 3.8+](https://www.python.org/) (for backend scripts)
+- Windows 10/11 (Linux support coming soon)
 
 ### Setup
 
-1. **Clone or download this repository**
-2. **Install Node.js dependencies for the frontend:**
+1. **Clone the repository:**
    ```sh
-   cd frontend
-   npm install
+   git clone https://github.com/aigrajo/AetherRE.git
+   cd AetherRE
    ```
-3. **(First time only) Download and set up Ghidra:**
-   ```powershell
-   powershell -NoProfile -ExecutionPolicy Bypass -Command "& {& '.\scripts\setup_ghidra.ps1'}"
-   ```
-   This will download Ghidra and set up the required directories.
 
----
-
-### Running the App
-
-1. **Start the app:**
+2. **Run the setup script:**
    ```sh
-   npm run start
+   setup.bat
    ```
-   or run the batch file:
+   This script will automatically:
+   - Check and verify all required dependencies
+   - Set up Ghidra (if not already installed)
+   - Create and configure Python virtual environment
+   - Install all Python dependencies
+   - Install frontend dependencies
+   - Create necessary directories
+
+   If any dependency is missing or outdated, the script will:
+   - Show the current version
+   - Provide a download link
+   - Exit with an error message
+
+3. **Start the application:**
    ```sh
-   run_aethere.bat
+   run_aetherre.bat
    ```
+   This will:
+   - Start the FastAPI backend server
+   - Launch the Electron GUI
+   - Set up the AI assistant
 
-2. **Using the GUI:**
-   - Click "Load File" to upload a binary (`.exe`, `.dll`, `.bin`) or a previously generated JSON file.
-   - If you upload a binary, the app will analyze it using Ghidra and show a real-time progress bar.
-   - Once analysis is complete, functions and their details will be displayed in the GUI.
-
----
-
-### How It Works
-
-- When you upload a binary, the app runs Ghidra headless analysis in the background.
-- Progress is shown in real time as functions are analyzed.
-- When finished, the extracted function data is displayed in the Electron GUI.
-- You can also load a previously analyzed JSON file.
-
----
+   To analyze a binary file:
+   ```sh
+   run_aetherre.bat path\to\binary.exe
+   ```
 
 ### Project Structure
 
 ```
 AetherRE/
 ├── frontend/           # Electron GUI application
-├── scripts/            # Batch and Python scripts for Ghidra automation
-├── data/               # Extracted function data (JSON)
-├── tools/              # Downloaded tools (Ghidra)
-├── temp/               # Temporary Ghidra project files
-└── config.json         # Project configuration
+│   ├── index.html     # Main application window
+│   ├── styles.css     # Application styles
+│   ├── renderer.js    # Main renderer process
+│   ├── resize.js      # Panel resizing functionality
+│   └── package.json   # Frontend dependencies
+├── backend/           # Python backend
+│   ├── main.py       # FastAPI server
+│   └── chat.py       # AI chat functionality
+├── scripts/           # Automation scripts
+│   ├── setup_ghidra.ps1    # Ghidra setup script
+│   └── run_ghidra_headless.bat  # Headless analysis
+├── data/              # Extracted function data (JSON)
+├── tools/             # Downloaded tools (Ghidra)
+├── temp/              # Temporary Ghidra project files
+├── venv/              # Python virtual environment
+├── requirements.txt   # Python dependencies
+├── setup.bat         # Initial setup script
+├── run_aetherre.bat  # Application launcher
+└── config.json       # Project configuration
 ```
 
----
+### Using the Application
+
+1. **Using the GUI:**
+   - Click "Load File" to upload a binary (`.exe`, `.dll`, `.bin`) or JSON file
+   - The app will analyze the binary using Ghidra in the background
+   - Once complete, functions and details are displayed in the GUI
+   - Use the AI Assistant panel for intelligent analysis
 
 ### Troubleshooting
 
-- **Progress bar not updating:**  
-  Ensure you have Python 3 installed and that your Ghidra scripts are up to date.
-- **Java not found:**  
-  Make sure Java 11+ is installed and in your PATH.
-- **Ghidra not found:**  
-  Run the setup script or manually extract Ghidra to `tools/ghidra`.
+The setup script includes comprehensive error checking and will help you resolve common issues:
 
-#### PowerShell Execution Policy
-If you encounter errors related to PowerShell execution policy, try running:
-```powershell
-Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope CurrentUser
-```
+1. **Dependency Issues:**
+   - If Python is missing or outdated: Script will show current version and provide download link
+   - If Node.js is missing or outdated: Script will show current version and provide download link
 
-#### Java Not Found
-Ghidra requires Java 11 or newer. If you get Java-related errors:
-1. Download and install Java from [Adoptium](https://adoptium.net/)
-2. Ensure java.exe is in your PATH
-3. Restart your command prompt
+2. **Installation Issues:**
+   - Virtual environment validation and repair
+   - Python package dependency checks
+   - Node.js dependency installation errors
+   - Ghidra setup problems
 
-#### npm Commands Not Working
-If npm commands fail:
-1. Ensure Node.js is installed properly
-2. Verify it's in your PATH by running `node --version` in a command prompt
-3. Try running the commands from an administrator command prompt
+3. **Runtime Issues:**
+   - Backend server startup problems
+   - Frontend application launch issues
+   - Ghidra analysis errors
 
-#### Can't Download Ghidra
-If the automatic download fails:
-1. Download Ghidra manually from [GitHub Releases](https://github.com/NationalSecurityAgency/ghidra/releases)
-2. Extract it to the `tools/ghidra` directory in the project
-3. Create a `config.json` file in the project root with:
-   ```json
-   {
-     "ghidra_path": "C:/path/to/extracted/ghidra_X.Y_PUBLIC_YYYYMMDD",
-     "ghidra_version": "X.Y"
-   }
+#### Manual Setup (if automatic setup fails)
+
+If the automatic setup fails, you can:
+
+1. **Set up Python environment manually:**
+   ```sh
+   python -m venv venv
+   .\venv\Scripts\activate
+   pip install -r requirements.txt
    ```
 
----
+2. **Set up frontend manually:**
+   ```sh
+   cd frontend
+   npm install
+   cd ..
+   ```
 
-### Advanced
+3. **Set up Ghidra manually:**
+   - Download from [GitHub Releases](https://github.com/NationalSecurityAgency/ghidra/releases)
+   - Extract to a directory of your choice
+   - Create `config.json`:
+     ```json
+     {
+       "ghidra_path": "C:/path/to/extracted/ghidra_X.Y_PUBLIC_YYYYMMDD",
+       "ghidra_version": "X.Y"
+     }
+     ```
 
-- You can run the Ghidra headless analysis manually:
-  ```sh
-  scripts\run_ghidra_headless.bat -binary C:\path\to\your\binary.exe
-  ```
-- The output JSON will be placed in the `data/` directory.
+### Features
 
----
-
-## Features
-
-- Extract function pseudocode, names, and addresses from binaries
-- Extract cross-references, variables, and string references
-- Structure extracted data into JSON files
-- Display extracted data in a modern Electron GUI
-- Support for multiple binary formats
+- Modern Electron-based GUI with resizable panels
+- AI-powered analysis assistant
+- Real-time binary analysis with Ghidra
 - Cross-reference visualization
 - Function call graph generation
 - String and data reference analysis
+- Variable and type analysis
+- Assembly and pseudocode views
 
----
+### Contributing
 
-## License
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+### License
 
 MIT License
 
----
+### Acknowledgments
 
-## Acknowledgments
-
-- [Ghidra](https://github.com/NationalSecurityAgency/ghidra) - The reverse engineering framework
-- [Electron](https://www.electronjs.org/) - The framework for building cross-platform desktop apps
-- [React](https://reactjs.org/) - The JavaScript library for building user interfaces
+- [Ghidra](https://github.com/NationalSecurityAgency/ghidra) - Reverse engineering framework
+- [Electron](https://www.electronjs.org/) - Desktop application framework
+- [FastAPI](https://fastapi.tiangolo.com/) - Backend API framework
+- [Monaco Editor](https://microsoft.github.io/monaco-editor/) - Code editor component

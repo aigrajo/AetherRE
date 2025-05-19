@@ -10,44 +10,12 @@ echo =============================================
 echo AetherRE - Ghidra Reverse Engineering Tool
 echo =============================================
 
-:: Check if Python is installed
-where python >nul 2>nul
-if %ERRORLEVEL% neq 0 (
-    echo Python is not installed or not in PATH
+:: Check if setup has been done
+if not exist venv (
+    echo [!] Setup has not been completed
+    echo [*] Please run setup.bat first
+    pause
     exit /b 1
-)
-
-:: Check if Node.js is installed
-where node >nul 2>nul
-if %ERRORLEVEL% neq 0 (
-    echo Node.js is not installed or not in PATH
-    exit /b 1
-)
-
-:: Check if config.json exists, if not run setup
-IF NOT EXIST "%CONFIG_FILE%" (
-    echo [*] First-time setup: Setting up Ghidra...
-    
-    :: Use PowerShell to run the setup script
-    PowerShell -NoProfile -ExecutionPolicy Bypass -Command "& {$ErrorActionPreference='Stop'; & '%PROJECT_ROOT%scripts\setup_ghidra.ps1'}"
-    
-    IF NOT !ERRORLEVEL! == 0 (
-        echo [!] Ghidra setup failed. Please check the error messages above.
-        pause
-        exit /b 1
-    )
-    
-    echo [+] Ghidra setup complete!
-)
-
-:: Setup the temp directory
-IF NOT EXIST "%TEMP_DIR%" (
-    mkdir "%TEMP_DIR%"
-)
-
-:: Setup the data directory
-IF NOT EXIST "%DATA_DIR%" (
-    mkdir "%DATA_DIR%"
 )
 
 :: Check for the command line argument (binary file)
@@ -80,38 +48,12 @@ IF "%1"=="" (
     )
 )
 
-:: Setup Python environment
-if not exist venv (
-    echo [*] Creating Python virtual environment...
-    python -m venv venv
-    call venv\Scripts\activate
-    echo [*] Installing Python dependencies...
-    pip install -r requirements.txt
-) else (
-    echo [*] Using existing Python virtual environment...
-    call venv\Scripts\activate
-)
-
 :: Start the FastAPI server in a new window
 echo [*] Starting backend server...
 start "AetherRE Backend" cmd /c "venv\Scripts\python backend\main.py --server"
 
 :: Wait a moment for the server to start
 timeout /t 2 /nobreak >nul
-
-:: Check if frontend dependencies are installed
-IF NOT EXIST "%PROJECT_ROOT%frontend\node_modules" (
-    echo [*] Installing frontend dependencies...
-    cd "%PROJECT_ROOT%frontend"
-    call npm install
-    IF NOT !ERRORLEVEL! == 0 (
-        echo [!] Failed to install dependencies. Please try again or install manually.
-        cd "%PROJECT_ROOT%"
-        pause
-        exit /b 1
-    )
-    cd "%PROJECT_ROOT%"
-)
 
 :: Start the GUI
 echo [*] Starting AetherRE GUI...
