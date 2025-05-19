@@ -150,12 +150,40 @@ if not exist requirements.txt (
 
 :: Install/update Python dependencies
 echo [*] Installing Python dependencies...
-pip install -r requirements.txt
+
+:: Upgrade pip first
+echo [*] Upgrading pip...
+python -m pip install --upgrade pip
 if %ERRORLEVEL% neq 0 (
-    echo [!] Failed to install Python dependencies
+    echo [!] Failed to upgrade pip
     pause
     exit /b 1
 )
+
+:: Install dependencies one by one with verification
+echo [*] Installing required packages...
+for /f "tokens=*" %%p in (requirements.txt) do (
+    echo [*] Installing %%p...
+    pip install %%p
+    if %ERRORLEVEL% neq 0 (
+        echo [!] Failed to install %%p
+        echo [*] Please check your internet connection and try again
+        pause
+        exit /b 1
+    )
+)
+
+:: Verify installations
+echo [*] Verifying installations...
+python -c "import openai, fastapi, uvicorn, pydantic, multipart, dotenv" 2>nul
+if %ERRORLEVEL% neq 0 (
+    echo [!] Some dependencies failed to install properly
+    echo [*] Please try running setup.bat again
+    pause
+    exit /b 1
+)
+
+echo [+] Python dependencies installed successfully!
 
 :: Install frontend dependencies
 echo [*] Installing frontend dependencies...
