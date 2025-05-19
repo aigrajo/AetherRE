@@ -48,9 +48,9 @@ IF "%1"=="" (
     )
 )
 
-:: Start the FastAPI server in a new window
+:: Start the FastAPI server in a new window with activated venv
 echo [*] Starting backend server...
-start "AetherRE Backend" cmd /c "venv\Scripts\python backend\main.py --server"
+start "AetherRE Backend" cmd /c "call %PROJECT_ROOT%venv\Scripts\activate.bat && python %PROJECT_ROOT%backend\main.py --server"
 
 :: Wait a moment for the server to start
 timeout /t 2 /nobreak >nul

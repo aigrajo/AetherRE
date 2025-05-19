@@ -12,6 +12,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from pydantic import BaseModel
+import time
+from datetime import datetime, timedelta
+from collections import deque
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -24,6 +27,57 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Rate limiting configuration
+RATE_LIMIT = {
+    'requests_per_minute': 10,  # Maximum requests per minute
+    'requests_per_hour': 100,   # Maximum requests per hour
+    'requests_per_day': 500     # Maximum requests per day
+}
+
+# Rate limiting storage
+request_timestamps = {
+    'minute': deque(maxlen=RATE_LIMIT['requests_per_minute']),
+    'hour': deque(maxlen=RATE_LIMIT['requests_per_hour']),
+    'day': deque(maxlen=RATE_LIMIT['requests_per_day'])
+}
+
+def check_rate_limit():
+    """Check if the current request exceeds rate limits."""
+    now = datetime.now()
+    
+    # Clean up old timestamps
+    for window in request_timestamps.values():
+        while window and (now - window[0]) > timedelta(days=1):
+            window.popleft()
+    
+    # Check minute limit
+    minute_ago = now - timedelta(minutes=1)
+    while request_timestamps['minute'] and request_timestamps['minute'][0] < minute_ago:
+        request_timestamps['minute'].popleft()
+    if len(request_timestamps['minute']) >= RATE_LIMIT['requests_per_minute']:
+        return False, "Rate limit exceeded: Too many requests per minute"
+    
+    # Check hour limit
+    hour_ago = now - timedelta(hours=1)
+    while request_timestamps['hour'] and request_timestamps['hour'][0] < hour_ago:
+        request_timestamps['hour'].popleft()
+    if len(request_timestamps['hour']) >= RATE_LIMIT['requests_per_hour']:
+        return False, "Rate limit exceeded: Too many requests per hour"
+    
+    # Check day limit
+    day_ago = now - timedelta(days=1)
+    while request_timestamps['day'] and request_timestamps['day'][0] < day_ago:
+        request_timestamps['day'].popleft()
+    if len(request_timestamps['day']) >= RATE_LIMIT['requests_per_day']:
+        return False, "Rate limit exceeded: Too many requests per day"
+    
+    # Add current timestamp to all windows
+    request_timestamps['minute'].append(now)
+    request_timestamps['hour'].append(now)
+    request_timestamps['day'].append(now)
+    
+    return True, None
 
 # Pydantic models for request/response
 class ChatRequest(BaseModel):
@@ -339,6 +393,12 @@ async def handle_chat_message(message: str, context: Dict[str, Any]) -> Dict[str
     """Handle chat messages with OpenAI API."""
     print(f"[Chat] Received message: {message}", file=sys.stderr)
     print(f"[Chat] Context: {json.dumps(context, indent=2)}", file=sys.stderr)
+    
+    # Check rate limits
+    allowed, error_message = check_rate_limit()
+    if not allowed:
+        print(f"[Chat] Rate limit exceeded: {error_message}", file=sys.stderr)
+        return {'reply': f"Rate limit exceeded. Please try again later. {error_message}"}
     
     cache_key = get_cache_key(message, context)
     print(f"[Chat] Cache key: {cache_key}", file=sys.stderr)
