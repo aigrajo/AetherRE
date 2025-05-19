@@ -62,6 +62,58 @@ def extract_instructions(func):
             instructions.append(instr_data)
     return instructions
 
+def extract_local_variables(func):
+    variables = []
+    for var in func.getLocalVariables():
+        var_data = {
+            "name": var.getName(),
+            "type": str(var.getDataType()),
+            "offset": var.getStackOffset(),
+            "size": var.getLength()
+        }
+        variables.append(var_data)
+    return variables
+
+def extract_local_strings(func):
+    strings = []
+    listing = currentProgram.getListing()
+    
+    # Get all references in the function
+    for ref in currentProgram.getReferenceManager().getReferencesTo(func.getEntryPoint()):
+        if ref.getReferenceType().isData():
+            data = listing.getDataAt(ref.getFromAddress())
+            if data and data.getDataType().getName() == "string":
+                try:
+                    string_value = str(data.getValue())
+                    string_data = {
+                        "address": str(data.getAddress()),
+                        "value": string_value,
+                        "length": len(string_value)
+                    }
+                    strings.append(string_data)
+                except:
+                    continue
+    
+    # Also check for string literals in the function body
+    for instr in listing.getInstructions(func.getBody(), True):
+        for ref in instr.getReferencesFrom():
+            if ref.getReferenceType().isData():
+                data = listing.getDataAt(ref.getToAddress())
+                if data and data.getDataType().getName() == "string":
+                    try:
+                        string_value = str(data.getValue())
+                        string_data = {
+                            "address": str(data.getAddress()),
+                            "value": string_value,
+                            "length": len(string_value)
+                        }
+                        if string_data not in strings:  # Avoid duplicates
+                            strings.append(string_data)
+                    except:
+                        continue
+    
+    return strings
+
 # Main function
 def run():
     print("[+] AetherRE Function Extractor Script")
@@ -102,13 +154,17 @@ def run():
         # Get pseudocode for the function
         pseudocode = get_pseudocode(func)
         instructions = extract_instructions(func)
+        local_vars = extract_local_variables(func)
+        local_strings = extract_local_strings(func)
         func_data = {
             "name": func.getName(),
             "address": str(func.getEntryPoint()),
             "size": func.getBody().getNumAddresses(),
             "signature": func.getSignature().toString(),
             "pseudocode": pseudocode,
-            "instructions": instructions
+            "instructions": instructions,
+            "local_variables": local_vars,
+            "local_strings": local_strings
         }
         functions.append(func_data)
         

@@ -251,19 +251,19 @@ function displayFunctionInfo(func) {
   const variablesTable = document.querySelector('#variables-table tbody');
   variablesTable.innerHTML = '';
   
-  if (func.variables && func.variables.length > 0) {
-    func.variables.forEach(variable => {
+  if (func.local_variables && func.local_variables.length > 0) {
+    func.local_variables.forEach(variable => {
       const row = document.createElement('tr');
       row.innerHTML = `
-        <td>${variable.name}</td>
-        <td>${variable.dataType}</td>
-        <td>${variable.isParameter ? 'Yes' : 'No'}</td>
-        <td>${variable.isStackVariable ? 'Yes' : 'No'}</td>
+        <td>${variable.name || 'unnamed'}</td>
+        <td>${variable.type || 'unknown'}</td>
+        <td>${variable.size || 'N/A'}</td>
+        <td>${variable.offset || 'N/A'}</td>
       `;
       variablesTable.appendChild(row);
     });
   } else {
-    variablesTable.innerHTML = '<tr><td colspan="4">No variables found</td></tr>';
+    variablesTable.innerHTML = '<tr><td colspan="4">No local variables found</td></tr>';
   }
   
   // Update xrefs tab
@@ -273,17 +273,18 @@ function displayFunctionInfo(func) {
   const stringsTable = document.querySelector('#strings-table tbody');
   stringsTable.innerHTML = '';
   
-  if (func.string_refs && func.string_refs.length > 0) {
-    func.string_refs.forEach(str => {
+  if (func.local_strings && func.local_strings.length > 0) {
+    func.local_strings.forEach(str => {
       const row = document.createElement('tr');
       row.innerHTML = `
-        <td>${str.address}</td>
-        <td>${str.value}</td>
+        <td>${str.address || 'N/A'}</td>
+        <td>${str.value || 'N/A'}</td>
+        <td>${str.type || 'N/A'}</td>
       `;
       stringsTable.appendChild(row);
     });
   } else {
-    stringsTable.innerHTML = '<tr><td colspan="2">No string references found</td></tr>';
+    stringsTable.innerHTML = '<tr><td colspan="3">No local strings found</td></tr>';
   }
 }
 
