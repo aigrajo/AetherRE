@@ -806,6 +806,18 @@ function setupTabSwitching() {
 // Start the application
 init();
 
+// Ensure Monaco editors layout after a short delay on load
+setTimeout(() => {
+  if (window.monacoEditor && window.monacoEditor.layout) window.monacoEditor.layout();
+  if (window.assemblyEditor && window.assemblyEditor.layout) window.assemblyEditor.layout();
+}, 150);
+
+// Also ensure layout after any window resize
+window.addEventListener('resize', () => {
+  if (window.monacoEditor && window.monacoEditor.layout) window.monacoEditor.layout();
+  if (window.assemblyEditor && window.assemblyEditor.layout) window.assemblyEditor.layout();
+});
+
 // Chat functionality
 function addMessage(content, isUser = false) {
   const messageDiv = document.createElement('div');
@@ -874,4 +886,12 @@ chatInput.addEventListener('keypress', (e) => {
     e.preventDefault();
     sendMessage();
   }
+});
+
+window.addEventListener('DOMContentLoaded', () => {
+  // Force Monaco editors to layout
+  if (window.monacoEditor && window.monacoEditor.layout) window.monacoEditor.layout();
+  if (window.assemblyEditor && window.assemblyEditor.layout) window.assemblyEditor.layout();
+  // Dispatch a resize event to trigger any layout recalculations
+  window.dispatchEvent(new Event('resize'));
 }); 

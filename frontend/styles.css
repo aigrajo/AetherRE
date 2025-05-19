@@ -126,7 +126,7 @@ body {
 /* Main content */
 .main-content {
   display: grid;
-  grid-template-columns: 250px 1fr 300px;
+  grid-template-columns: 280px 1fr 300px;
   height: calc(100vh - 60px);
   position: relative;
 }
@@ -163,14 +163,15 @@ body {
 
 /* Sidebar */
 .sidebar {
-  width: 280px;
+  /* width: 280px; */
+  min-width: 200px;
+  max-width: 400px;
+  width: 100%;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  min-width: 200px;
-  max-width: 400px;
 }
 
 .function-list-container {
