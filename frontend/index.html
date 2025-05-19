@@ -57,7 +57,20 @@
               <div id="pseudocode-editor"></div>
             </div>
             <div id="assembly-tab" class="tab-pane">
-              <div id="assembly-editor"></div>
+              <div class="assembly-table-container">
+                <table id="assembly-table">
+                  <thead>
+                    <tr>
+                      <th>Address</th>
+                      <th>Offset</th>
+                      <th>Bytes</th>
+                      <th>Mnemonic</th>
+                      <th>Operands</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
             </div>
             <div id="xrefs-tab" class="tab-pane">
               <div class="xref-controls">

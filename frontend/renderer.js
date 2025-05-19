@@ -309,15 +309,31 @@ function displayFunctionInfo(func) {
   }
 
   // Update assembly view
-  if (assemblyEditor && func.assembly) {
-    // Format assembly instructions into a readable string
-    const assemblyText = func.assembly.map(instr => {
-      const offset = instr.offset.toString(16).padStart(8, '0');
-      const bytes = instr.bytes.padEnd(16, ' ');
-      return `${instr.address}  ${offset}  ${bytes}  ${instr.mnemonic} ${instr.operands}`;
-    }).join('\n');
-    
-    assemblyEditor.setValue(assemblyText || '// No assembly available');
+  const assemblyTableBody = document.querySelector('#assembly-table tbody');
+  if (assemblyTableBody) {
+    assemblyTableBody.innerHTML = '';
+    if (func.assembly && func.assembly.length > 0) {
+      func.assembly.forEach(instr => {
+        const row = document.createElement('tr');
+        const address = String(instr.address);
+        const offset = instr.offset.toString(16).padStart(8, '0');
+        const bytes = String(instr.bytes);
+        const mnemonic = String(instr.mnemonic);
+        const operands = instr.operands || '';
+        row.innerHTML = `
+          <td class="asm-address">${address}</td>
+          <td class="asm-offset">${offset}</td>
+          <td class="asm-bytes">${bytes}</td>
+          <td class="asm-mnemonic">${mnemonic}</td>
+          <td class="asm-operands">${operands}</td>
+        `;
+        assemblyTableBody.appendChild(row);
+      });
+    } else {
+      const row = document.createElement('tr');
+      row.innerHTML = '<td colspan="5">No assembly available</td>';
+      assemblyTableBody.appendChild(row);
+    }
   }
   
   // Update variables tab
@@ -380,9 +396,15 @@ function switchTab(tabName) {
     pane.classList.toggle('active', pane.id === `${tabName}-tab`);
   });
   
-  // Refresh editor layout when switching to pseudocode tab
-  if (tabName === 'pseudocode' && monacoEditor) {
-    setTimeout(() => monacoEditor.layout(), 0);
+  // Refresh editor layout when switching to pseudocode or assembly tab
+  if ((tabName === 'pseudocode' || tabName === 'assembly') && monacoEditor) {
+    setTimeout(() => {
+      if (tabName === 'pseudocode') {
+        monacoEditor.layout();
+      } else if (tabName === 'assembly' && assemblyEditor) {
+        assemblyEditor.layout();
+      }
+    }, 0);
   }
   
   // If switching to xrefs tab, force update

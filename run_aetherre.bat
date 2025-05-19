@@ -7,7 +7,7 @@ SET TEMP_DIR=%PROJECT_ROOT%temp
 SET DATA_DIR=%PROJECT_ROOT%data
 
 echo =============================================
-echo AetherRE - Ghidra Reverse Engineering Tool
+echo AetherRE - Ghidra Reverse Engineering Plugin
 echo =============================================
 
 :: Check if setup has been done
