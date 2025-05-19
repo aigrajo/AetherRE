@@ -18,4 +18,39 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.removeListener('analysis-progress', progressListener);
       });
   }
+});
+
+contextBridge.exposeInMainWorld('electronAPI', {
+  // ... existing exposed APIs ...
+  
+  // Chat API
+  sendChatMessage: async (data) => {
+    try {
+      console.log('[Chat API] Sending request to backend...');
+      const response = await fetch('http://localhost:8000/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[Chat API] Server error:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        throw new Error(`Server error: ${response.status} ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('[Chat API] Received response:', result);
+      return result;
+    } catch (error) {
+      console.error('[Chat API] Network error:', error);
+      throw error; // Re-throw to be handled by the renderer
+    }
+  },
 }); 

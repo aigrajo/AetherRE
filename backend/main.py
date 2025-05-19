@@ -5,7 +5,33 @@ import os
 import subprocess
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
+import openai
+import hashlib
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
+from pydantic import BaseModel
+
+# Initialize FastAPI app
+app = FastAPI()
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Pydantic models for request/response
+class ChatRequest(BaseModel):
+    message: str
+    context: Dict[str, Any]
+
+class ChatResponse(BaseModel):
+    reply: str
 
 class XRefType:
     DIRECT_CALL = "direct"
@@ -293,8 +319,112 @@ def analyze_json_with_xrefs(json_string):
             "message": str(e)
         }))
 
+# Load OpenAI API key from environment variable
+openai.api_key = os.getenv('OPENAI_API_KEY')
+
+# Cache for storing chat responses
+chat_cache = {}
+
+def get_cache_key(message: str, context: Dict[str, Any]) -> str:
+    """Generate a cache key based on message and context."""
+    cache_data = {
+        'message': message,
+        'function_name': context.get('functionName'),
+        'address': context.get('address'),
+        'pseudocode_hash': hashlib.md5(context.get('pseudocode', '').encode()).hexdigest()
+    }
+    return hashlib.md5(json.dumps(cache_data, sort_keys=True).encode()).hexdigest()
+
+async def handle_chat_message(message: str, context: Dict[str, Any]) -> Dict[str, str]:
+    """Handle chat messages with OpenAI API."""
+    print(f"[Chat] Received message: {message}", file=sys.stderr)
+    print(f"[Chat] Context: {json.dumps(context, indent=2)}", file=sys.stderr)
+    
+    cache_key = get_cache_key(message, context)
+    print(f"[Chat] Cache key: {cache_key}", file=sys.stderr)
+    
+    # Check cache first
+    if cache_key in chat_cache:
+        print(f"[Chat] Cache hit for key: {cache_key}", file=sys.stderr)
+        return {'reply': chat_cache[cache_key]}
+    
+    print("[Chat] Cache miss, calling OpenAI API", file=sys.stderr)
+    
+    # Prepare the prompt with context
+    prompt = f"""You are an AI assistant helping with reverse engineering. 
+Current function: {context.get('functionName')}
+Address: {context.get('address')}
+
+Pseudocode:
+{context.get('pseudocode')}
+
+User question: {message}
+
+Please provide a clear and concise response focusing on the reverse engineering aspects."""
+
+    try:
+        print("[Chat] Checking OpenAI API key...", file=sys.stderr)
+        if not openai.api_key:
+            raise ValueError("OpenAI API key not found in environment variables")
+            
+        print("[Chat] Calling OpenAI API...", file=sys.stderr)
+        # Call OpenAI API
+        response = await openai.ChatCompletion.acreate(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are an expert reverse engineering assistant. Provide clear, technical explanations focused on binary analysis and function behavior."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=500,
+            temperature=0.7
+        )
+        
+        reply = response.choices[0].message.content.strip()
+        print(f"[Chat] Received response from OpenAI: {reply[:100]}...", file=sys.stderr)
+        
+        # Cache the response
+        chat_cache[cache_key] = reply
+        print(f"[Chat] Cached response for key: {cache_key}", file=sys.stderr)
+        
+        return {'reply': reply}
+    except ValueError as ve:
+        print(f"[Chat] Configuration error: {str(ve)}", file=sys.stderr)
+        return {'reply': "Configuration error: OpenAI API key not found. Please check your environment variables."}
+    except openai.error.AuthenticationError as ae:
+        print(f"[Chat] Authentication error: {str(ae)}", file=sys.stderr)
+        return {'reply': "Authentication error: Invalid OpenAI API key. Please check your credentials."}
+    except openai.error.RateLimitError as re:
+        print(f"[Chat] Rate limit error: {str(re)}", file=sys.stderr)
+        return {'reply': "Rate limit exceeded. Please try again in a few moments."}
+    except Exception as e:
+        print(f"[Chat] Unexpected error: {str(e)}", file=sys.stderr)
+        print(f"[Chat] Error type: {type(e)}", file=sys.stderr)
+        import traceback
+        print(f"[Chat] Traceback: {traceback.format_exc()}", file=sys.stderr)
+        return {'reply': "I apologize, but I encountered an error processing your request. Please try again."}
+
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat_endpoint(request: ChatRequest):
+    try:
+        print(f"[Chat API] Received request: {request.message}", file=sys.stderr)
+        result = await handle_chat_message(request.message, request.context)
+        return result
+    except Exception as e:
+        print(f"[Chat API] Error handling request: {str(e)}", file=sys.stderr)
+        raise HTTPException(status_code=500, detail=str(e))
+
+def start_server():
+    """Start the FastAPI server"""
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+
 def main():
-    # Read messages from stdin
+    # Check if we should start the server
+    if len(sys.argv) > 1 and sys.argv[1] == "--server":
+        print("[Server] Starting FastAPI server...", file=sys.stderr)
+        start_server()
+        return
+
+    # Original message handling logic
     while True:
         try:
             message = input()

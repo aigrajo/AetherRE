@@ -139,9 +139,23 @@
           </div>
         </div>
       </div>
+
+      <div class="chat-sidebar">
+        <div class="chat-header">
+          <h2>AI Assistant</h2>
+        </div>
+        <div class="chat-messages" id="chat-messages">
+          <!-- Messages will be dynamically added here -->
+        </div>
+        <div class="chat-input-container">
+          <textarea id="chat-input" placeholder="Ask about the current function..."></textarea>
+          <button id="send-message" class="action-button">Send</button>
+        </div>
+      </div>
     </div>
   </div>
 
   <script src="renderer.js"></script>
+  <script src="resize.js"></script>
 </body>
 </html> 

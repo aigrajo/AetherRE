@@ -51,6 +51,11 @@ const tabButtons = document.querySelectorAll('.tab-button');
 const tabPanes = document.querySelectorAll('.tab-pane');
 const appTitle = document.querySelector('.app-header h1');
 
+// Chat functionality
+const chatMessages = document.getElementById('chat-messages');
+const chatInput = document.getElementById('chat-input');
+const sendMessageBtn = document.getElementById('send-message');
+
 // Initialize Monaco Editor
 function initMonacoEditor() {
   // Load Monaco from CDN
@@ -777,4 +782,74 @@ function setupTabSwitching() {
 }
 
 // Start the application
-init(); 
+init();
+
+// Chat functionality
+function addMessage(content, isUser = false) {
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `message ${isUser ? 'user' : 'assistant'}`;
+  messageDiv.textContent = content;
+  chatMessages.appendChild(messageDiv);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+async function sendMessage() {
+  const message = chatInput.value.trim();
+  if (!message) return;
+
+  console.log('[Chat] Sending message:', message);
+
+  // Add user message to chat
+  addMessage(message, true);
+  chatInput.value = '';
+
+  try {
+    // Get current function context
+    const currentFunction = document.getElementById('function-name').textContent;
+    const pseudocode = monacoEditor.getValue();
+    const address = document.getElementById('function-address').textContent;
+
+    console.log('[Chat] Context:', {
+      functionName: currentFunction,
+      address: address,
+      pseudocodeLength: pseudocode.length
+    });
+
+    // Send to backend
+    console.log('[Chat] Sending request to backend...');
+    const response = await window.electronAPI.sendChatMessage({
+      message,
+      context: {
+        functionName: currentFunction,
+        pseudocode,
+        address
+      }
+    });
+
+    console.log('[Chat] Received response:', response);
+
+    if (!response || !response.reply) {
+      throw new Error('Invalid response format from backend');
+    }
+
+    // Add assistant response
+    addMessage(response.reply);
+  } catch (error) {
+    console.error('[Chat] Error sending message:', error);
+    console.error('[Chat] Error details:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
+    addMessage('Sorry, there was an error processing your request. Please check the console for details.', false);
+  }
+}
+
+// Event listeners for chat
+sendMessageBtn.addEventListener('click', sendMessage);
+chatInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}); 
