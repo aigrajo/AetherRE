@@ -270,7 +270,6 @@ function displayFunctionInfo(func) {
               range: match.range,
               options: {
                 inlineClassName: 'variable-name',
-                hoverMessage: { value: 'Click to rename variable' },
                 stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
               }
             });
@@ -279,25 +278,7 @@ function displayFunctionInfo(func) {
       });
       
       // Apply the decorations
-      const decorationIds = monacoEditor.deltaDecorations([], decorations);
-      
-      // Add click handler for variable names
-      monacoEditor.onMouseDown(e => {
-        const position = e.target.position;
-        const decorations = monacoEditor.getLineDecorations(position.lineNumber);
-        const decoration = decorations.find(d => 
-          position.column >= d.range.startColumn && 
-          position.column <= d.range.endColumn
-        );
-        
-        if (decoration) {
-          const variableName = monacoEditor.getModel().getValueInRange(decoration.range);
-          const newName = prompt('Enter new variable name:', variableName);
-          if (newName && newName !== variableName) {
-            renameVariable(variableName, newName);
-          }
-        }
-      });
+      monacoEditor.deltaDecorations([], decorations);
     }
   }
   
