@@ -840,12 +840,14 @@ async function sendMessage() {
     // Get current function context
     const currentFunction = document.getElementById('function-name').textContent;
     const pseudocode = monacoEditor.getValue();
+    console.log('[Chat] Pseudocode preview:', pseudocode.slice(0, 200)); // Show first 200 chars
+    console.log('[Chat] Pseudocode length:', pseudocode.length);
     const address = document.getElementById('function-address').textContent;
 
     console.log('[Chat] Context:', {
       functionName: currentFunction,
       address: address,
-      pseudocodeLength: pseudocode.length
+      pseudocode: pseudocode // Show actual pseudocode in log
     });
 
     // Send to backend
@@ -854,7 +856,7 @@ async function sendMessage() {
       message,
       context: {
         functionName: currentFunction,
-        pseudocode,
+        pseudocode, // Actually send the full pseudocode string
         address
       }
     });

@@ -15,6 +15,11 @@ from pydantic import BaseModel
 import time
 from datetime import datetime, timedelta
 from collections import deque
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+print(f"[DEBUG] Environment variables loaded. OPENAI_API_KEY present: {bool(os.getenv('OPENAI_API_KEY'))}", file=sys.stderr)
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -30,9 +35,9 @@ app.add_middleware(
 
 # Rate limiting configuration
 RATE_LIMIT = {
-    'requests_per_minute': 10,  # Maximum requests per minute
-    'requests_per_hour': 100,   # Maximum requests per hour
-    'requests_per_day': 500     # Maximum requests per day
+    'requests_per_minute': 5,  # Maximum requests per minute
+    'requests_per_hour': 50,   # Maximum requests per hour
+    'requests_per_day': 250     # Maximum requests per day
 }
 
 # Rate limiting storage
@@ -412,15 +417,17 @@ async def handle_chat_message(message: str, context: Dict[str, Any]) -> Dict[str
     
     # Prepare the prompt with context
     prompt = f"""You are an AI assistant helping with reverse engineering. 
-Current function: {context.get('functionName')}
-Address: {context.get('address')}
 
-Pseudocode:
+Function Context:
+- Name: {context.get('functionName')}
+- Address: {context.get('address')}
+
+Pseudocode Analysis:
 {context.get('pseudocode')}
 
-User question: {message}
+User Question: {message}
 
-Please provide a clear and concise response focusing on the reverse engineering aspects."""
+Please provide a clear and concise response focusing on the reverse engineering aspects. If the pseudocode is available, use it to provide more detailed insights about the function's behavior."""
 
     try:
         print("[Chat] Checking OpenAI API key...", file=sys.stderr)
@@ -428,9 +435,10 @@ Please provide a clear and concise response focusing on the reverse engineering 
             raise ValueError("OpenAI API key not found in environment variables")
             
         print("[Chat] Calling OpenAI API...", file=sys.stderr)
-        # Call OpenAI API
-        response = await openai.ChatCompletion.acreate(
-            model="gpt-4",
+        # Call OpenAI API using the new format
+        client = openai.OpenAI()
+        response = client.chat.completions.create(
+            model="gpt-4.1-nano",
             messages=[
                 {"role": "system", "content": "You are an expert reverse engineering assistant. Provide clear, technical explanations focused on binary analysis and function behavior."},
                 {"role": "user", "content": prompt}
@@ -450,10 +458,10 @@ Please provide a clear and concise response focusing on the reverse engineering 
     except ValueError as ve:
         print(f"[Chat] Configuration error: {str(ve)}", file=sys.stderr)
         return {'reply': "Configuration error: OpenAI API key not found. Please check your environment variables."}
-    except openai.error.AuthenticationError as ae:
+    except openai.AuthenticationError as ae:
         print(f"[Chat] Authentication error: {str(ae)}", file=sys.stderr)
         return {'reply': "Authentication error: Invalid OpenAI API key. Please check your credentials."}
-    except openai.error.RateLimitError as re:
+    except openai.RateLimitError as re:
         print(f"[Chat] Rate limit error: {str(re)}", file=sys.stderr)
         return {'reply': "Rate limit exceeded. Please try again in a few moments."}
     except Exception as e:
