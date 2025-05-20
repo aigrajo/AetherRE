@@ -728,31 +728,79 @@ table th {
 }
 
 .chat-sessions {
-  padding: 0.5rem 1rem;
-  border-bottom: 1px solid var(--border-color);
-  background-color: var(--bg-tertiary);
+  margin: 10px 0;
+  position: relative;
+  padding: 0 12px;
 }
 
 .chat-sessions-select {
-  width: 100%;
-  padding: 0.5rem;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  font-size: 13px;
+  width: calc(100% - 24px);
+  padding: 8px 32px 8px 12px;
+  border: 1px solid #2d2d2d;
+  border-radius: 6px;
+  background-color: #1a1a1a;
+  color: #fff;
+  font-size: 14px;
   cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 16px;
+  transition: border-color 0.2s ease;
+  margin: 0 auto;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: ltr;
+}
+
+.chat-sessions-select:hover {
+  border-color: #3d3d3d;
 }
 
 .chat-sessions-select:focus {
   outline: none;
-  border-color: var(--accent-color);
-  box-shadow: 0 0 0 1px var(--glow-color);
+  border-color: #4d4d4d;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
 }
 
 .chat-sessions-select option {
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
+  background-color: #1a1a1a;
+  color: #fff;
+  padding: 8px;
+}
+
+/* Style for the default option */
+.chat-sessions-select option[value=""] {
+  color: #888;
+}
+
+/* Style for selected option */
+.chat-sessions-select option:checked {
+  background-color: #2d2d2d;
+}
+
+/* Custom scrollbar for the dropdown */
+.chat-sessions-select::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-sessions-select::-webkit-scrollbar-track {
+  background: #1a1a1a;
+  border-radius: 4px;
+}
+
+.chat-sessions-select::-webkit-scrollbar-thumb {
+  background: #3d3d3d;
+  border-radius: 4px;
+}
+
+.chat-sessions-select::-webkit-scrollbar-thumb:hover {
+  background: #4d4d4d;
 }
 
 .chat-messages {
