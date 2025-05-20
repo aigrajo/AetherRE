@@ -37,7 +37,6 @@ The setup script will automatically check for and verify these requirements:
    ```sh
    python -m venv venv
    .\venv\Scripts\activate
-   pip install --upgrade pip
    pip install -r requirements.txt
    ```
 
