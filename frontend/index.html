@@ -157,6 +157,23 @@
       <div class="chat-sidebar">
         <div class="chat-header">
           <h2>AI Assistant</h2>
+          <div class="chat-actions">
+            <button id="new-chat-btn" class="icon-button" title="New Chat">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <button id="clear-chat-btn" class="icon-button" title="Clear Chat">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 3L13 13M3 13L13 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="chat-sessions">
+          <select id="chat-sessions-select" class="chat-sessions-select">
+            <option value="">Select a chat session...</option>
+          </select>
         </div>
         <div class="chat-messages" id="chat-messages">
           <!-- Messages will be dynamically added here -->

@@ -90,9 +90,11 @@ def check_rate_limit():
 class ChatRequest(BaseModel):
     message: str
     context: Dict[str, Any]
+    session_id: Optional[str] = None
 
 class ChatResponse(BaseModel):
     reply: str
+    session_id: str
 
 class XRefType:
     DIRECT_CALL = "direct"
@@ -396,7 +398,78 @@ def get_cache_key(message: str, context: Dict[str, Any]) -> str:
     }
     return hashlib.md5(json.dumps(cache_data, sort_keys=True).encode()).hexdigest()
 
-async def stream_chat_response(message: str, context: Dict[str, Any]):
+# Chat session management
+class ChatSession:
+    def __init__(self, session_id: str):
+        self.session_id = session_id
+        self.messages = []
+        self.created_at = datetime.now()
+        self.last_activity = datetime.now()
+        self.name = None  # Add name field
+
+    def add_message(self, role: str, content: str):
+        self.messages.append({"role": role, "content": content})
+        self.last_activity = datetime.now()
+        
+        # Generate name after first user message if not set
+        if role == "user" and not self.name and len(self.messages) == 1:
+            self.generate_name(content)
+
+    def get_messages(self) -> List[Dict[str, str]]:
+        return self.messages
+
+    def clear(self):
+        self.messages = []
+        self.last_activity = datetime.now()
+        self.name = None  # Reset name when clearing
+
+    def generate_name(self, first_message: str):
+        """Generate a name for the chat based on the first user message."""
+        try:
+            # Truncate message if too long
+            truncated_message = first_message[:100]
+            
+            # Create a prompt for name generation
+            messages = [
+                {"role": "system", "content": "Generate a short, descriptive title (max 5 words) for a chat based on the first message. The title should capture the main topic or question."},
+                {"role": "user", "content": f"First message: {truncated_message}"}
+            ]
+            
+            # Call OpenAI API to generate name
+            client = openai.OpenAI()
+            response = client.chat.completions.create(
+                model="gpt-4.1-nano",
+                messages=messages,
+                max_tokens=20,
+                temperature=0.7
+            )
+            
+            # Extract and clean the generated name
+            generated_name = response.choices[0].message.content.strip()
+            # Remove quotes if present
+            generated_name = generated_name.strip('"\'')
+            # Truncate if too long
+            self.name = generated_name[:50]
+            
+        except Exception as e:
+            print(f"[Chat] Error generating chat name: {str(e)}", file=sys.stderr)
+            # Fallback to a default name
+            self.name = f"Chat {self.session_id[:8]}"
+
+# Store active chat sessions
+chat_sessions: Dict[str, ChatSession] = {}
+
+# Cleanup old sessions (older than 24 hours)
+def cleanup_old_sessions():
+    now = datetime.now()
+    sessions_to_remove = []
+    for session_id, session in chat_sessions.items():
+        if (now - session.last_activity) > timedelta(hours=24):
+            sessions_to_remove.append(session_id)
+    for session_id in sessions_to_remove:
+        del chat_sessions[session_id]
+
+async def stream_chat_response(message: str, context: Dict[str, Any], session_id: Optional[str] = None):
     """Stream chat responses from OpenAI API."""
     print(f"[Chat] Received message: {message}", file=sys.stderr)
     print(f"[Chat] Context: {json.dumps(context, indent=2)}", file=sys.stderr)
@@ -408,32 +481,37 @@ async def stream_chat_response(message: str, context: Dict[str, Any]):
         yield f"data: {json.dumps({'reply': f'Rate limit exceeded. Please try again later. {error_message}'})}\n\n"
         await asyncio.sleep(0)
         return
-    
-    cache_key = get_cache_key(message, context)
-    print(f"[Chat] Cache key: {cache_key}", file=sys.stderr)
-    
-    # Check cache first
-    if cache_key in chat_cache:
-        print(f"[Chat] Cache hit for key: {cache_key}", file=sys.stderr)
-        yield f"data: {json.dumps({'reply': chat_cache[cache_key]})}\n\n"
-        await asyncio.sleep(0)
-        return
-    
-    print("[Chat] Cache miss, calling OpenAI API", file=sys.stderr)
-    
-    # Prepare the prompt with context
-    prompt = f"""You are an AI assistant helping with reverse engineering. 
 
+    # Create new session if none exists or if the provided session_id doesn't exist
+    if not session_id or session_id not in chat_sessions:
+        session_id = hashlib.md5(str(datetime.now()).encode()).hexdigest()
+        chat_sessions[session_id] = ChatSession(session_id)
+    
+    session = chat_sessions[session_id]
+    session.add_message("user", message)
+    
+    # Prepare the prompt with context and chat history
+    system_prompt = """You are an AI assistant helping with reverse engineering. 
+    You have access to the current function's context and previous conversation history.
+    Please provide clear and concise responses focusing on the reverse engineering aspects."""
+
+    # Build messages array with history
+    messages = [{"role": "system", "content": system_prompt}]
+    
+    # Add chat history
+    for msg in session.get_messages():
+        messages.append(msg)
+    
+    # Add current context
+    context_prompt = f"""
 Function Context:
 - Name: {context.get('functionName')}
 - Address: {context.get('address')}
 
 Pseudocode Analysis:
 {context.get('pseudocode')}
-
-User Question: {message}
-
-Please provide a clear and concise response focusing on the reverse engineering aspects. If the pseudocode is available, use it to provide more detailed insights about the function's behavior."""
+"""
+    messages.append({"role": "system", "content": context_prompt})
 
     try:
         print("[Chat] Checking OpenAI API key...", file=sys.stderr)
@@ -441,14 +519,10 @@ Please provide a clear and concise response focusing on the reverse engineering 
             raise ValueError("OpenAI API key not found in environment variables")
             
         print("[Chat] Calling OpenAI API...", file=sys.stderr)
-        # Call OpenAI API using the new format with streaming
         client = openai.OpenAI()
         response = client.chat.completions.create(
             model="gpt-4.1-nano",
-            messages=[
-                {"role": "system", "content": "You are an expert reverse engineering assistant. Provide clear, technical explanations focused on binary analysis and function behavior."},
-                {"role": "user", "content": prompt}
-            ],
+            messages=messages,
             max_tokens=500,
             temperature=0.7,
             stream=True
@@ -459,31 +533,16 @@ Please provide a clear and concise response focusing on the reverse engineering 
             if chunk.choices[0].delta.content:
                 content = chunk.choices[0].delta.content
                 full_reply += content
-                yield f"data: {json.dumps({'reply': content})}\n\n"
+                yield f"data: {json.dumps({'reply': content, 'session_id': session_id})}\n\n"
                 await asyncio.sleep(0)
         
-        # Cache the complete response
-        chat_cache[cache_key] = full_reply
-        print(f"[Chat] Cached response for key: {cache_key}", file=sys.stderr)
+        # Add assistant's response to chat history
+        session.add_message("assistant", full_reply)
         
-    except ValueError as ve:
-        print(f"[Chat] Configuration error: {str(ve)}", file=sys.stderr)
-        yield f"data: {json.dumps({'reply': 'Configuration error: OpenAI API key not found. Please check your environment variables.'})}\n\n"
-        await asyncio.sleep(0)
-    except openai.AuthenticationError as ae:
-        print(f"[Chat] Authentication error: {str(ae)}", file=sys.stderr)
-        yield f"data: {json.dumps({'reply': 'Authentication error: Invalid OpenAI API key. Please check your credentials.'})}\n\n"
-        await asyncio.sleep(0)
-    except openai.RateLimitError as re:
-        print(f"[Chat] Rate limit error: {str(re)}", file=sys.stderr)
-        yield f"data: {json.dumps({'reply': 'Rate limit exceeded. Please try again in a few moments.'})}\n\n"
-        await asyncio.sleep(0)
     except Exception as e:
-        print(f"[Chat] Unexpected error: {str(e)}", file=sys.stderr)
-        print(f"[Chat] Error type: {type(e)}", file=sys.stderr)
-        import traceback
-        print(f"[Chat] Traceback: {traceback.format_exc()}", file=sys.stderr)
-        yield f"data: {json.dumps({'reply': 'I apologize, but I encountered an error processing your request. Please try again.'})}\n\n"
+        print(f"[Chat] Error: {str(e)}", file=sys.stderr)
+        error_message = f"Error: {str(e)}"
+        yield f"data: {json.dumps({'reply': error_message, 'session_id': session_id})}\n\n"
         await asyncio.sleep(0)
 
 @app.post("/api/chat")
@@ -491,12 +550,46 @@ async def chat_endpoint(request: ChatRequest):
     try:
         print(f"[Chat API] Received request: {request.message}", file=sys.stderr)
         return StreamingResponse(
-            stream_chat_response(request.message, request.context),
+            stream_chat_response(request.message, request.context, request.session_id),
             media_type="text/event-stream"
         )
     except Exception as e:
         print(f"[Chat API] Error handling request: {str(e)}", file=sys.stderr)
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/chat/new")
+async def new_chat():
+    """Create a new chat session."""
+    # Don't create a session immediately, just return a temporary ID
+    # The actual session will be created when the first message is sent
+    temp_id = hashlib.md5(str(datetime.now()).encode()).hexdigest()
+    return {"session_id": temp_id}
+
+@app.post("/api/chat/{session_id}/clear")
+async def clear_chat(session_id: str):
+    """Clear a chat session's history."""
+    if session_id in chat_sessions:
+        chat_sessions[session_id].clear()
+        return {"status": "success"}
+    raise HTTPException(status_code=404, detail="Chat session not found")
+
+@app.get("/api/chat/sessions")
+async def list_sessions():
+    """List all active chat sessions."""
+    cleanup_old_sessions()  # Clean up old sessions before listing
+    return {
+        "sessions": [
+            {
+                "session_id": session_id,
+                "name": session.name or f"Chat {session_id[:8]}",  # Include name in response
+                "created_at": session.created_at.isoformat(),
+                "last_activity": session.last_activity.isoformat(),
+                "message_count": len(session.messages),
+                "messages": session.messages  # Include messages in response
+            }
+            for session_id, session in chat_sessions.items()
+        ]
+    }
 
 def start_server():
     """Start the FastAPI server"""

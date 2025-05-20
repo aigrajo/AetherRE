@@ -104,6 +104,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       const decoder = new TextDecoder('utf-8');
       let fullReply = '';
       let buffer = '';
+      let sessionId = null;
 
       while (true) {
         const { value, done } = await reader.read();
@@ -118,7 +119,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
               const dataObj = JSON.parse(eventStr.replace('data: ', '').trim());
               if (dataObj.reply) {
                 fullReply += dataObj.reply;
-                window.dispatchEvent(new CustomEvent('chat-chunk', { detail: dataObj.reply }));
+                sessionId = dataObj.session_id;
+                window.dispatchEvent(new CustomEvent('chat-chunk', { 
+                  detail: dataObj.reply,
+                  sessionId: dataObj.session_id
+                }));
               }
             } catch (e) {
               console.error('[Chat API] Error parsing streamed chunk:', e);
@@ -126,7 +131,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
           }
         }
       }
-      return { reply: fullReply };
+      return { reply: fullReply, session_id: sessionId };
     } catch (error) {
       console.error('[Chat API] Network error:', error);
       if (error.name === 'AbortError') {
@@ -135,7 +140,68 @@ contextBridge.exposeInMainWorld('electronAPI', {
           detail: 'Error: Request to AI service timed out. The backend server might not be running or is taking too long to respond.' 
         }));
       }
-      throw error; // Re-throw to be handled by the renderer
+      throw error;
     }
   },
+
+  // New chat session APIs
+  createNewChat: async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/chat/new', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status} ${response.statusText}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('[Chat API] Error creating new chat:', error);
+      throw error;
+    }
+  },
+
+  clearChat: async (sessionId) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/chat/${sessionId}/clear`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status} ${response.statusText}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('[Chat API] Error clearing chat:', error);
+      throw error;
+    }
+  },
+
+  listChatSessions: async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/chat/sessions', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status} ${response.statusText}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('[Chat API] Error listing chat sessions:', error);
+      throw error;
+    }
+  }
 }); 

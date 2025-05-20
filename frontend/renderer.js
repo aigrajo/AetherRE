@@ -6,6 +6,9 @@ let currentFunction = null;
 let currentFilePath = null;
 let originalBinaryName = null;  // Track the original binary name
 
+// Chat session management
+let currentSessionId = null;
+
 // Helper functions
 function getFunctionName(addressOrName) {
     if (!addressOrName) return null;
@@ -54,6 +57,11 @@ const appTitle = document.querySelector('.app-header h1');
 // Chat functionality
 const chatMessages = document.getElementById('chat-messages');
 const chatInput = document.getElementById('chat-input');
+
+// DOM Elements for chat session management
+const newChatBtn = document.getElementById('new-chat-btn');
+const clearChatBtn = document.getElementById('clear-chat-btn');
+const chatSessionsSelect = document.getElementById('chat-sessions-select');
 
 // Initialize Monaco Editor
 function initMonacoEditor() {
@@ -786,6 +794,9 @@ function init() {
   initFileHandling();
   checkRecentAnalyses();
   setupTabSwitching();
+  
+  // Set initial dropdown text
+  chatSessionsSelect.innerHTML = '<option value="">Write a prompt to create a chat session</option>';
 }
 
 // Setup tab switching
@@ -865,6 +876,140 @@ function addMessage(content, isUser = false) {
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
+// Initialize chat session
+async function initializeChatSession() {
+  try {
+    // First, refresh sessions to get all existing ones
+    await refreshChatSessions(false); // false means don't select any session
+    
+    // Then create a new session
+    const response = await window.electronAPI.createNewChat();
+    currentSessionId = response.session_id;
+    
+    // Clear chat messages for the new session
+    chatMessages.innerHTML = '';
+    
+    // Update dropdown to show all sessions plus a default option for the new one
+    updateSessionDropdown();
+  } catch (error) {
+    console.error('[Chat] Error initializing chat session:', error);
+  }
+}
+
+// Update the sessions dropdown with all sessions plus default option
+function updateSessionDropdown() {
+  // Get all current options (these are the existing sessions)
+  const currentOptions = Array.from(chatSessionsSelect.options);
+  
+  // Clear dropdown
+  chatSessionsSelect.innerHTML = '';
+  
+  // Add default option for new/unsaved session
+  const defaultOption = document.createElement('option');
+  defaultOption.value = '';
+  defaultOption.textContent = 'Write a prompt to create a chat session';
+  chatSessionsSelect.appendChild(defaultOption);
+  
+  // Add back all the session options
+  currentOptions.forEach(option => {
+    // Skip the default option if it exists
+    if (option.value !== '') {
+      chatSessionsSelect.appendChild(option.cloneNode(true));
+    }
+  });
+  
+  // Select default option for new session
+  chatSessionsSelect.value = '';
+}
+
+// Refresh chat sessions list
+async function refreshChatSessions(selectCurrentSession = true) {
+  try {
+    const response = await window.electronAPI.listChatSessions();
+    const sessions = response.sessions;
+    
+    // Save current options to check if we need to add the default option
+    const hasDefaultOption = chatSessionsSelect.querySelector('option[value=""]') !== null;
+    
+    // Clear existing options
+    chatSessionsSelect.innerHTML = '';
+    
+    // Add default option if it was there before or if no sessions exist
+    if (hasDefaultOption || sessions.length === 0) {
+      const defaultOption = document.createElement('option');
+      defaultOption.value = '';
+      defaultOption.textContent = 'Write a prompt to create a chat session';
+      chatSessionsSelect.appendChild(defaultOption);
+    }
+    
+    // Add session options
+    sessions.forEach(session => {
+      const option = document.createElement('option');
+      option.value = session.session_id;
+      const date = new Date(session.last_activity);
+      // Use the generated name if available, otherwise use the default format
+      const displayName = session.name || `Chat ${session.session_id.slice(0, 8)}`;
+      option.textContent = `${displayName} (${date.toLocaleTimeString()})`;
+      chatSessionsSelect.appendChild(option);
+    });
+
+    // If we have a current session ID but it's not in the list, clear it
+    if (currentSessionId && !sessions.some(s => s.session_id === currentSessionId)) {
+      currentSessionId = null;
+    }
+    
+    // Set dropdown value based on current session
+    if (selectCurrentSession && currentSessionId) {
+      chatSessionsSelect.value = currentSessionId;
+    } else if (!selectCurrentSession && hasDefaultOption) {
+      chatSessionsSelect.value = '';
+    }
+  } catch (error) {
+    console.error('[Chat] Error refreshing chat sessions:', error);
+  }
+}
+
+// Load chat history for a session
+async function loadChatHistory(sessionId) {
+  // Clear current chat messages regardless
+  chatMessages.innerHTML = '';
+  
+  // If no sessionId or empty, we're done (new session with no history)
+  if (!sessionId) return;
+  
+  try {
+    const response = await window.electronAPI.listChatSessions();
+    const session = response.sessions.find(s => s.session_id === sessionId);
+    
+    if (session && session.messages) {
+      // Add each message to the chat
+      session.messages.forEach(msg => {
+        addMessage(msg.content, msg.role === 'user');
+      });
+    }
+  } catch (error) {
+    console.error('[Chat] Error loading chat history:', error);
+  }
+}
+
+// Event listeners for chat session management
+newChatBtn.addEventListener('click', async () => {
+  await initializeChatSession();
+});
+
+clearChatBtn.addEventListener('click', async () => {
+  await clearCurrentChat();
+});
+
+chatSessionsSelect.addEventListener('change', async () => {
+  const newSessionId = chatSessionsSelect.value;
+  if (newSessionId !== currentSessionId) {
+    currentSessionId = newSessionId;
+    await loadChatHistory(currentSessionId);
+  }
+});
+
+// Update sendMessage function to handle session creation
 async function sendMessage() {
   const message = chatInput.value.trim();
   if (!message) return;
@@ -921,7 +1066,8 @@ async function sendMessage() {
         functionName: currentFunction,
         pseudocode,
         address
-      }
+      },
+      session_id: currentSessionId
     });
 
     // Remove the chunk handler
@@ -930,6 +1076,16 @@ async function sendMessage() {
     if (!response || !response.reply) {
       throw new Error('Invalid response format from backend');
     }
+
+    // Update current session ID if it's a new session
+    if (response.session_id && response.session_id !== currentSessionId) {
+      currentSessionId = response.session_id;
+      await refreshChatSessions();
+      chatSessionsSelect.value = currentSessionId;
+    }
+
+    // Refresh chat sessions to get updated names
+    await refreshChatSessions();
 
     // Final update with complete markdown
     if (window.marked && window.DOMPurify) {
@@ -981,4 +1137,6 @@ window.addEventListener('DOMContentLoaded', () => {
   if (window.assemblyEditor && window.assemblyEditor.layout) window.assemblyEditor.layout();
   // Dispatch a resize event to trigger any layout recalculations
   window.dispatchEvent(new Event('resize'));
+  // Initialize chat session when the page loads
+  initializeChatSession();
 }); 
