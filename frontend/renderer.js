@@ -817,6 +817,28 @@ window.addEventListener('resize', () => {
   if (window.assemblyEditor && window.assemblyEditor.layout) window.assemblyEditor.layout();
 });
 
+// Configure marked options for better markdown rendering
+if (window.marked) {
+  marked.setOptions({
+    gfm: true, // Enable GitHub Flavored Markdown
+    breaks: true, // Add <br> on single line breaks
+    headerIds: false, // Disable header IDs to prevent XSS
+    mangle: false, // Disable mangling to prevent XSS
+    smartLists: true, // Use smarter list behavior
+    smartypants: true, // Use smart punctuation
+    highlight: function(code, lang) {
+      if (window.hljs && lang) {
+        try {
+          return hljs.highlight(code, { language: lang }).value;
+        } catch (e) {
+          return code;
+        }
+      }
+      return code;
+    }
+  });
+}
+
 // Chat functionality
 function addMessage(content, isUser = false) {
   const messageDiv = document.createElement('div');
@@ -857,24 +879,23 @@ async function sendMessage() {
     // Get current function context
     const currentFunction = document.getElementById('function-name').textContent;
     const pseudocode = monacoEditor.getValue();
-    console.log('[Chat] Pseudocode preview:', pseudocode.slice(0, 200)); // Show first 200 chars
-    console.log('[Chat] Pseudocode length:', pseudocode.length);
     const address = document.getElementById('function-address').textContent;
 
-    console.log('[Chat] Context:', {
-      functionName: currentFunction,
-      address: address,
-      pseudocode: pseudocode // Show actual pseudocode in log
-    });
-
-    // Create a temporary message div for streaming
+    // Create a temporary message div for the generating state
     const tempMessageDiv = document.createElement('div');
-    tempMessageDiv.className = 'message assistant';
+    tempMessageDiv.className = 'message assistant generating';
+    tempMessageDiv.textContent = 'Generating...';
     chatMessages.appendChild(tempMessageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
 
     let assistantReply = '';
     // Listen for chat chunks
     const chunkHandler = (event) => {
+      if (!assistantReply) {
+        // Clear the "Generating..." message on first chunk
+        tempMessageDiv.className = 'message assistant';
+        tempMessageDiv.textContent = '';
+      }
       assistantReply += event.detail;
       if (window.marked && window.DOMPurify) {
         const rawHtml = window.marked.parse(assistantReply);
@@ -898,7 +919,7 @@ async function sendMessage() {
       message,
       context: {
         functionName: currentFunction,
-        pseudocode, // Actually send the full pseudocode string
+        pseudocode,
         address
       }
     });
@@ -906,17 +927,16 @@ async function sendMessage() {
     // Remove the chunk handler
     window.removeEventListener('chat-chunk', chunkHandler);
 
-    console.log('[Chat] Received complete response:', response);
-
     if (!response || !response.reply) {
       throw new Error('Invalid response format from backend');
     }
 
-    // Update the final message
+    // Final update with complete markdown
     if (window.marked && window.DOMPurify) {
       const rawHtml = window.marked.parse(response.reply);
       const cleanHtml = window.DOMPurify.sanitize(rawHtml);
       tempMessageDiv.innerHTML = cleanHtml;
+      tempMessageDiv.className = 'message assistant';
       if (window.hljs) {
         tempMessageDiv.querySelectorAll('pre code').forEach((block) => {
           window.hljs.highlightElement(block);
