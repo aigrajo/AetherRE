@@ -502,6 +502,40 @@ async def stream_chat_response(message: str, context: Dict[str, Any], session_id
     for msg in session.get_messages():
         messages.append(msg)
     
+    # Format assembly instructions
+    assembly_text = ""
+    if context.get('assembly'):
+        assembly_text = "\nAssembly Instructions:\n"
+        for instr in context['assembly']:
+            assembly_text += f"{instr['address']}: {instr['mnemonic']} {instr['operands']}\n"
+
+    # Format variables
+    variables_text = ""
+    if context.get('variables'):
+        variables_text = "\nLocal Variables:\n"
+        for var in context['variables']:
+            variables_text += f"- {var['name']} ({var['type']}) at offset {var['offset']}\n"
+
+    # Format xrefs
+    xrefs_text = ""
+    if context.get('xrefs'):
+        xrefs = context['xrefs']
+        if xrefs.get('incoming'):
+            xrefs_text += "\nIncoming References:\n"
+            for xref in xrefs['incoming']:
+                xrefs_text += f"- {xref['name']} at {xref['address']} (offset: {xref['offset']})\n"
+        if xrefs.get('outgoing'):
+            xrefs_text += "\nOutgoing References:\n"
+            for xref in xrefs['outgoing']:
+                xrefs_text += f"- {xref['name']} at {xref['address']} (offset: {xref['offset']})\n"
+
+    # Format strings
+    strings_text = ""
+    if context.get('strings'):
+        strings_text = "\nString References:\n"
+        for string in context['strings']:
+            strings_text += f"- {string['value']} at {string['address']}\n"
+
     # Add current context
     context_prompt = f"""
 Function Context:
@@ -510,6 +544,10 @@ Function Context:
 
 Pseudocode Analysis:
 {context.get('pseudocode')}
+{assembly_text}
+{variables_text}
+{xrefs_text}
+{strings_text}
 """
     messages.append({"role": "system", "content": context_prompt})
 

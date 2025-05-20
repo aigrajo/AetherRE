@@ -1021,6 +1021,63 @@ async function sendMessage() {
     const pseudocode = monacoEditor.getValue();
     const address = document.getElementById('function-address').textContent;
 
+    // Get assembly instructions
+    const assemblyTable = document.querySelector('#assembly-table tbody');
+    const assembly = Array.from(assemblyTable.querySelectorAll('tr')).map(row => {
+      const cells = row.querySelectorAll('td');
+      return {
+        address: cells[0].textContent,
+        offset: cells[1].textContent,
+        bytes: cells[2].textContent,
+        mnemonic: cells[3].textContent,
+        operands: cells[4].textContent
+      };
+    });
+
+    // Get variables
+    const variablesTable = document.querySelector('#variables-table tbody');
+    const variables = Array.from(variablesTable.querySelectorAll('tr')).map(row => {
+      const cells = row.querySelectorAll('td');
+      return {
+        name: cells[0].textContent,
+        type: cells[1].textContent,
+        size: cells[2].textContent,
+        offset: cells[3].textContent
+      };
+    });
+
+    // Get xrefs
+    const incomingXrefs = Array.from(document.querySelector('#incoming-xrefs-table tbody').querySelectorAll('tr')).map(row => {
+      const cells = row.querySelectorAll('td');
+      return {
+        name: cells[0].textContent,
+        address: cells[1].textContent,
+        offset: cells[2].textContent,
+        context: cells[3].textContent
+      };
+    });
+
+    const outgoingXrefs = Array.from(document.querySelector('#outgoing-xrefs-table tbody').querySelectorAll('tr')).map(row => {
+      const cells = row.querySelectorAll('td');
+      return {
+        name: cells[0].textContent,
+        address: cells[1].textContent,
+        offset: cells[2].textContent,
+        context: cells[3].textContent
+      };
+    });
+
+    // Get strings from the current function
+    const stringsTable = document.querySelector('#strings-table tbody');
+    const strings = Array.from(stringsTable.querySelectorAll('tr')).map(row => {
+      const cells = row.querySelectorAll('td');
+      return {
+        address: cells[0].textContent,
+        value: cells[1].textContent,
+        type: cells[2].textContent
+      };
+    });
+
     // Create a temporary message div for the generating state
     const tempMessageDiv = document.createElement('div');
     tempMessageDiv.className = 'message assistant generating';
@@ -1060,7 +1117,14 @@ async function sendMessage() {
       context: {
         functionName: currentFunction,
         pseudocode,
-        address
+        address,
+        assembly,
+        variables,
+        xrefs: {
+          incoming: incomingXrefs,
+          outgoing: outgoingXrefs
+        },
+        strings
       },
       session_id: currentSessionId
     });
