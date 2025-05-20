@@ -203,5 +203,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
       console.error('[Chat API] Error listing chat sessions:', error);
       throw error;
     }
-  }
+  },
+
+  deleteChatSession: async (sessionId) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/chat/${sessionId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status} ${response.statusText}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('[Chat API] Error deleting chat session:', error);
+      throw error;
+    }
+  },
 }); 

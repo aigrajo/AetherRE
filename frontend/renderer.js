@@ -60,7 +60,6 @@ const chatInput = document.getElementById('chat-input');
 
 // DOM Elements for chat session management
 const newChatBtn = document.getElementById('new-chat-btn');
-const clearChatBtn = document.getElementById('clear-chat-btn');
 const chatSessionsSelect = document.getElementById('chat-sessions-select');
 
 // Initialize Monaco Editor
@@ -997,10 +996,6 @@ newChatBtn.addEventListener('click', async () => {
   await initializeChatSession();
 });
 
-clearChatBtn.addEventListener('click', async () => {
-  await clearCurrentChat();
-});
-
 chatSessionsSelect.addEventListener('change', async () => {
   const newSessionId = chatSessionsSelect.value;
   if (newSessionId !== currentSessionId) {
@@ -1139,4 +1134,20 @@ window.addEventListener('DOMContentLoaded', () => {
   window.dispatchEvent(new Event('resize'));
   // Initialize chat session when the page loads
   initializeChatSession();
+});
+
+const deleteChatBtn = document.getElementById('delete-chat-btn');
+
+deleteChatBtn.addEventListener('click', async () => {
+  if (!currentSessionId) return; // Do nothing if no session
+  try {
+    await window.electronAPI.deleteChatSession(currentSessionId);
+    currentSessionId = null;
+    await refreshChatSessions(false); // Don't select any session
+    chatMessages.innerHTML = '';
+    chatSessionsSelect.value = '';
+  } catch (error) {
+    console.error('[Chat] Error deleting chat session:', error);
+    // Optionally show a user-facing error
+  }
 }); 

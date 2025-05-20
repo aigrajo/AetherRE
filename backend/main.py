@@ -573,6 +573,14 @@ async def clear_chat(session_id: str):
         return {"status": "success"}
     raise HTTPException(status_code=404, detail="Chat session not found")
 
+@app.delete("/api/chat/{session_id}")
+async def delete_chat(session_id: str):
+    """Delete a chat session."""
+    if session_id in chat_sessions:
+        del chat_sessions[session_id]
+        return {"status": "success"}
+    raise HTTPException(status_code=404, detail="Chat session not found")
+
 @app.get("/api/chat/sessions")
 async def list_sessions():
     """List all active chat sessions."""
