@@ -10,6 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/loader.min.js"></script>
+  <!-- No external visualization libraries - we'll implement our own solution -->
 </head>
 <body>
   <div class="app-container">
@@ -51,6 +52,7 @@
             <button class="tab-button" data-tab="xrefs">Cross-References</button>
             <button class="tab-button" data-tab="variables">Variables</button>
             <button class="tab-button" data-tab="strings">Strings</button>
+            <button class="tab-button" data-tab="cfg">CFG</button>
           </div>
           
           <div class="tab-content">
@@ -149,6 +151,28 @@
                 </thead>
                 <tbody></tbody>
               </table>
+            </div>
+            <div id="cfg-tab" class="tab-pane">
+              <div class="cfg-container">
+                <div class="cfg-toolbar">
+                  <button id="cfg-zoom-in" class="cfg-button">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                  </button>
+                  <button id="cfg-zoom-out" class="cfg-button">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M3 8H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                  </button>
+                  <button id="cfg-fit" class="cfg-button">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <rect x="3" y="3" width="10" height="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                  </button>
+                </div>
+                <div id="cfg-canvas"></div>
+              </div>
             </div>
           </div>
         </div>

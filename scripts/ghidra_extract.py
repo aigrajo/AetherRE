@@ -128,6 +128,63 @@ def extract_assembly(func):
         assembly.append(asm_data)
     return assembly
 
+def extract_cfg(func):
+    """Extract Control Flow Graph data for a function"""
+    from ghidra.program.model.block import BasicBlockModel
+    
+    cfg_data = {
+        "nodes": [],
+        "edges": []
+    }
+    
+    # Use BasicBlockModel to get code blocks
+    blockModel = BasicBlockModel(func.getProgram())
+    blocks = blockModel.getCodeBlocksContaining(func.getBody(), monitor)
+    
+    # Extract nodes (basic blocks)
+    while blocks.hasNext():
+        block = blocks.next()
+        
+        # Skip blocks that are not in this function
+        if not func.getBody().contains(block.getFirstStartAddress()):
+            continue
+            
+        node_data = {
+            "id": str(block.getFirstStartAddress()),
+            "start_address": str(block.getFirstStartAddress()),
+            "end_address": str(block.getMaxAddress()),
+            "size": block.getNumAddresses(),
+            "instructions": []
+        }
+        
+        # Add instructions in this block
+        listing = func.getProgram().getListing()
+        for instr in listing.getInstructions(block, True):
+            node_data["instructions"].append({
+                "address": str(instr.getAddress()),
+                "mnemonic": instr.getMnemonicString(),
+                "operands": instr.getDefaultOperandRepresentation(0)
+            })
+        
+        cfg_data["nodes"].append(node_data)
+        
+        # Add edges for this block
+        dests = block.getDestinations(monitor)
+        while dests.hasNext():
+            dest = dests.next()
+            # Skip destinations outside this function
+            if not func.getBody().contains(dest.getDestinationAddress()):
+                continue
+                
+            edge_data = {
+                "source": str(block.getFirstStartAddress()),
+                "target": str(dest.getDestinationAddress()),
+                "type": "conditional" if dest.getFlowType().isConditional() else "unconditional"
+            }
+            cfg_data["edges"].append(edge_data)
+    
+    return cfg_data
+
 # Main function
 def run():
     print("[+] AetherRE Function Extractor Script")
@@ -170,7 +227,9 @@ def run():
         instructions = extract_instructions(func)
         local_vars = extract_local_variables(func)
         local_strings = extract_local_strings(func)
-        assembly = extract_assembly(func)  # Extract assembly instructions
+        assembly = extract_assembly(func)
+        cfg = extract_cfg(func)  # Extract CFG data
+        
         func_data = {
             "name": func.getName(),
             "address": str(func.getEntryPoint()),
@@ -180,7 +239,8 @@ def run():
             "instructions": instructions,
             "local_variables": local_vars,
             "local_strings": local_strings,
-            "assembly": assembly  # Add assembly to the output
+            "assembly": assembly,
+            "cfg": cfg  # Add CFG data to the output
         }
         functions.append(func_data)
         

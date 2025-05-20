@@ -1275,4 +1275,129 @@ table th {
 
 .toggle-label input[type="checkbox"]:checked + span {
   color: var(--text-primary);
+}
+
+/* CFG styling */
+.cfg-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  position: relative;
+  background: var(--bg-tertiary);
+}
+
+.cfg-toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.cfg-button {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  width: 30px;
+  height: 30px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.cfg-button:hover {
+  background: var(--hover-color);
+}
+
+.cfg-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+#cfg-canvas {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+  height: calc(100% - 46px);
+  background: var(--bg-tertiary);
+}
+
+/* CFG graph styles */
+.cfg-node {
+  fill: var(--bg-secondary);
+  stroke: var(--border-color);
+  stroke-width: 1px;
+  rx: 4px;
+  ry: 4px;
+  cursor: pointer;
+  transition: stroke 0.2s ease;
+}
+
+.cfg-node:hover {
+  stroke: var(--accent-color);
+}
+
+.cfg-node.selected {
+  stroke: var(--text-primary);
+  stroke-width: 2px;
+}
+
+.cfg-node-title {
+  fill: var(--text-secondary);
+  font-size: 12px;
+  font-family: 'Fira Code', monospace;
+  font-weight: 500;
+  pointer-events: none;
+}
+
+.cfg-node-content {
+  fill: var(--text-primary);
+  font-size: 12px;
+  font-family: 'Fira Code', monospace;
+  pointer-events: none;
+}
+
+.cfg-edge {
+  stroke: var(--border-color);
+  stroke-width: 1.5px;
+  fill: none;
+  transition: stroke 0.2s ease;
+}
+
+.cfg-edge:hover {
+  stroke: var(--accent-color);
+}
+
+.cfg-edge.conditional {
+  stroke-dasharray: 4, 4;
+}
+
+.cfg-edge-marker {
+  fill: var(--border-color);
+}
+
+.cfg-edge-marker.conditional {
+  fill: var(--accent-color);
+}
+
+.cfg-tooltip {
+  position: absolute;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 1000;
+  max-width: 300px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.cfg-tooltip.visible {
+  opacity: 1;
 } 

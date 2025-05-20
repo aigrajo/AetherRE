@@ -48,6 +48,128 @@ if (DOMPurify) {
 }
 if (hljs) contextBridge.exposeInMainWorld('hljs', hljs);
 
+// Simple graph layout utility for CFG visualization
+const CFGVisualizer = {
+  // Simple layered graph layout algorithm (similar to Sugiyama)
+  layoutGraph: (nodes, edges) => {
+    // Create a map of node ids to indices
+    const nodeMap = new Map();
+    nodes.forEach((node, index) => {
+      nodeMap.set(node.id, index);
+    });
+    
+    // Create adjacency lists
+    const outgoing = Array(nodes.length).fill().map(() => []);
+    const incoming = Array(nodes.length).fill().map(() => []);
+    
+    edges.forEach(edge => {
+      const sourceIdx = nodeMap.get(edge.source);
+      const targetIdx = nodeMap.get(edge.target);
+      if (sourceIdx !== undefined && targetIdx !== undefined) {
+        outgoing[sourceIdx].push(targetIdx);
+        incoming[targetIdx].push(sourceIdx);
+      }
+    });
+    
+    // Assign layers (simple topological sort-based approach)
+    const layers = [];
+    const nodeLayer = Array(nodes.length).fill(-1);
+    const stack = [];
+    const visited = Array(nodes.length).fill(false);
+    
+    // Find roots (nodes with no incoming edges)
+    for (let i = 0; i < nodes.length; i++) {
+      if (incoming[i].length === 0) {
+        stack.push(i);
+      }
+    }
+    
+    // If no roots found, take the first node
+    if (stack.length === 0 && nodes.length > 0) {
+      stack.push(0);
+    }
+    
+    // Do a BFS to assign layers
+    let layer = 0;
+    while (stack.length > 0) {
+      const currentLayer = [];
+      const nextStack = [];
+      
+      for (const nodeIdx of stack) {
+        if (visited[nodeIdx]) continue;
+        visited[nodeIdx] = true;
+        nodeLayer[nodeIdx] = layer;
+        currentLayer.push(nodeIdx);
+        
+        for (const targetIdx of outgoing[nodeIdx]) {
+          if (!visited[targetIdx]) {
+            nextStack.push(targetIdx);
+          }
+        }
+      }
+      
+      layers.push(currentLayer);
+      stack.length = 0;
+      stack.push(...nextStack);
+      layer++;
+    }
+    
+    // Check for any unvisited nodes and assign them to the deepest layer
+    const unvisitedNodes = [];
+    for (let i = 0; i < nodes.length; i++) {
+      if (!visited[i]) {
+        nodeLayer[i] = layers.length;
+        unvisitedNodes.push(i);
+      }
+    }
+    
+    if (unvisitedNodes.length > 0) {
+      layers.push(unvisitedNodes);
+    }
+    
+    // Assign x coordinates (horizontally space nodes in each layer)
+    const nodePositions = nodes.map((node, idx) => {
+      const layer = nodeLayer[idx];
+      const layerNodes = layers[layer];
+      const layerIndex = layerNodes.indexOf(idx);
+      const x = (layerIndex + 1) * (800 / (layerNodes.length + 1));
+      const y = (layer + 1) * 150;
+      
+      return {
+        id: node.id,
+        x: x,
+        y: y,
+        width: node.width || 180,
+        height: node.height || 100
+      };
+    });
+    
+    return {
+      nodePositions,
+      edgeRoutes: edges.map(edge => {
+        const sourcePos = nodePositions.find(pos => pos.id === edge.source);
+        const targetPos = nodePositions.find(pos => pos.id === edge.target);
+        
+        if (!sourcePos || !targetPos) return null;
+        
+        // Simple edge routing
+        return {
+          source: edge.source,
+          target: edge.target,
+          points: [
+            { x: sourcePos.x, y: sourcePos.y + sourcePos.height/2 },
+            { x: targetPos.x, y: targetPos.y - targetPos.height/2 }
+          ],
+          type: edge.type
+        };
+      }).filter(route => route !== null)
+    };
+  }
+};
+
+// Expose CFG visualizer to renderer
+contextBridge.exposeInMainWorld('CFGVisualizer', CFGVisualizer);
+
 // Expose protected methods for renderer process
 contextBridge.exposeInMainWorld('api', {
   loadJsonFile: (filePath) => ipcRenderer.invoke('load-json-file', filePath),
