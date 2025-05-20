@@ -23,19 +23,30 @@ The setup script will automatically check for and verify these requirements:
    cd AetherRE
    ```
 
-2. **Run the setup script:**
+2. **Run the setup script to install prerequisites:**
    ```sh
    setup.bat
    ```
    This script will automatically:
    - Check and verify all required dependencies
    - Set up Ghidra (if not already installed)
-   - Create and configure Python virtual environment
-   - Install all Python dependencies
-   - Install frontend dependencies
-   - Create necessary directories
+   - Create necessary directories (temp, data)
+   - Install npm dependencies
 
-3. **Start the application:**
+3. **Set up Python environment:**
+   ```sh
+   python -m venv venv
+   .\venv\Scripts\activate
+   pip install --upgrade pip
+   pip install -r requirements.txt
+   ```
+   This will:
+   - Create a virtual environment
+   - Activate the virtual environment
+   - Upgrade pip to the latest version
+   - Install all required Python packages
+
+4. **Start the application:**
    ```sh
    run_aetherre.bat
    ```
@@ -85,26 +96,21 @@ AetherRE/
 
 ### Troubleshooting
 
+If you encounter issues during setup:
 
-#### Manual Setup (if automatic setup fails)
-
-If the automatic setup fails, you can:
-
-1. **Set up Python environment manually:**
+1. **Check for Python version compatibility:**
    ```sh
-   python -m venv venv
-   .\venv\Scripts\activate
-   pip install -r requirements.txt
+   python --version
    ```
+   Ensure you're using Python 3.8 or higher.
 
-2. **Set up frontend manually:**
+2. **Verify Node.js installation:**
    ```sh
-   cd frontend
-   npm install
-   cd ..
+   node --version
    ```
+   Ensure you're using Node.js 16 or higher.
 
-3. **Set up Ghidra manually:**
+3. **Manual Ghidra setup:**
    - Download from [GitHub Releases](https://github.com/NationalSecurityAgency/ghidra/releases)
    - Extract to a directory of your choice
    - Create `config.json`:
@@ -114,6 +120,10 @@ If the automatic setup fails, you can:
        "ghidra_version": "X.Y"
      }
      ```
+
+4. **If Python dependency installation fails:**
+   - Try installing problematic packages individually
+   - Check for any special requirements for your platform
 
 ### Features
 

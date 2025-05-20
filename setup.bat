@@ -100,104 +100,17 @@ IF NOT EXIST "%DATA_DIR%" (
     mkdir "%DATA_DIR%"
 )
 
-:: Setup Python environment
-echo [*] Setting up Python environment...
-
-:: Check for existing venv
-if exist venv (
-    echo [*] Found existing virtual environment...
-    
-    :: Check if venv is valid
-    if not exist "venv\Scripts\python.exe" (
-        echo [!] Existing virtual environment appears to be corrupted
-        echo [*] Removing corrupted environment...
-        rmdir /s /q venv
-        echo [*] Creating new virtual environment...
-        python -m venv venv
-        if %ERRORLEVEL% neq 0 (
-            echo [!] Failed to create virtual environment
-            pause
-            exit /b 1
-        )
-    ) else (
-        echo [*] Using existing virtual environment...
-    )
-) else (
-    echo [*] Creating new virtual environment...
-    python -m venv venv
-    if %ERRORLEVEL% neq 0 (
-        echo [!] Failed to create virtual environment
-        pause
-        exit /b 1
-    )
-)
-
-:: Activate virtual environment and install dependencies
-echo [*] Setting up Python environment...
-call venv\Scripts\activate
-if %ERRORLEVEL% neq 0 (
-    echo [!] Failed to activate virtual environment
-    pause
-    exit /b 1
-)
-
-:: Check if requirements.txt exists
-if not exist requirements.txt (
-    echo [!] Error: requirements.txt not found
-    pause
-    exit /b 1
-)
-
-:: Install/update Python dependencies
-echo [*] Installing Python dependencies...
-
-:: Upgrade pip first
-echo [*] Upgrading pip...
-python -m pip install --upgrade pip
-if %ERRORLEVEL% neq 0 (
-    echo [!] Failed to upgrade pip
-    pause
-    exit /b 1
-)
-
-:: Install dependencies one by one with verification
-echo [*] Installing required packages...
-for /f "tokens=*" %%p in (requirements.txt) do (
-    echo [*] Installing %%p...
-    pip install %%p
-    if %ERRORLEVEL% neq 0 (
-        echo [!] Failed to install %%p
-        echo [*] Please check your internet connection and try again
-        pause
-        exit /b 1
-    )
-)
-
-:: Verify installations
-echo [*] Verifying installations...
-python -c "import openai, fastapi, uvicorn, pydantic, multipart, dotenv" 2>nul
-if %ERRORLEVEL% neq 0 (
-    echo [!] Some dependencies failed to install properly
-    echo [*] Please try running setup.bat again
-    pause
-    exit /b 1
-)
-
-echo [+] Python dependencies installed successfully!
-
-:: Install frontend dependencies
-echo [*] Installing frontend dependencies...
-cd "%PROJECT_ROOT%frontend"
+:: Install npm dependencies
+echo [*] Installing npm dependencies...
 call npm install
 IF NOT !ERRORLEVEL! == 0 (
-    echo [!] Failed to install frontend dependencies
-    cd "%PROJECT_ROOT%"
+    echo [!] Failed to install npm dependencies
     pause
     exit /b 1
 )
-cd "%PROJECT_ROOT%"
 
 echo [+] Setup complete. 
-echo [+] You can now run run_aetherre.bat to start the application.
+echo [+] Please install Python dependencies by following the instructions in README.md
+echo [+] After installing dependencies, you can run run_aetherre.bat to start the application.
 pause
 endlocal 
