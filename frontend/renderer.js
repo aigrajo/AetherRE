@@ -1018,65 +1018,89 @@ async function sendMessage() {
   try {
     // Get current function context
     const currentFunction = document.getElementById('function-name').textContent;
-    const pseudocode = monacoEditor.getValue();
+    const pseudocode = document.getElementById('toggle-pseudocode').checked ? monacoEditor.getValue() : '';
     const address = document.getElementById('function-address').textContent;
 
-    // Get assembly instructions
-    const assemblyTable = document.querySelector('#assembly-table tbody');
-    const assembly = Array.from(assemblyTable.querySelectorAll('tr')).map(row => {
-      const cells = row.querySelectorAll('td');
-      return {
-        address: cells[0].textContent,
-        offset: cells[1].textContent,
-        bytes: cells[2].textContent,
-        mnemonic: cells[3].textContent,
-        operands: cells[4].textContent
-      };
-    });
+    // Initialize context object with required fields
+    const context = {
+      functionName: currentFunction,
+      address: address
+    };
 
-    // Get variables
-    const variablesTable = document.querySelector('#variables-table tbody');
-    const variables = Array.from(variablesTable.querySelectorAll('tr')).map(row => {
-      const cells = row.querySelectorAll('td');
-      return {
-        name: cells[0].textContent,
-        type: cells[1].textContent,
-        size: cells[2].textContent,
-        offset: cells[3].textContent
-      };
-    });
+    // Add pseudocode if enabled
+    if (document.getElementById('toggle-pseudocode').checked) {
+      context.pseudocode = pseudocode;
+    }
 
-    // Get xrefs
-    const incomingXrefs = Array.from(document.querySelector('#incoming-xrefs-table tbody').querySelectorAll('tr')).map(row => {
-      const cells = row.querySelectorAll('td');
-      return {
-        name: cells[0].textContent,
-        address: cells[1].textContent,
-        offset: cells[2].textContent,
-        context: cells[3].textContent
-      };
-    });
+    // Add assembly if enabled
+    if (document.getElementById('toggle-assembly').checked) {
+      const assemblyTable = document.querySelector('#assembly-table tbody');
+      context.assembly = Array.from(assemblyTable.querySelectorAll('tr')).map(row => {
+        const cells = row.querySelectorAll('td');
+        return {
+          address: cells[0].textContent,
+          offset: cells[1].textContent,
+          bytes: cells[2].textContent,
+          mnemonic: cells[3].textContent,
+          operands: cells[4].textContent
+        };
+      });
+    }
 
-    const outgoingXrefs = Array.from(document.querySelector('#outgoing-xrefs-table tbody').querySelectorAll('tr')).map(row => {
-      const cells = row.querySelectorAll('td');
-      return {
-        name: cells[0].textContent,
-        address: cells[1].textContent,
-        offset: cells[2].textContent,
-        context: cells[3].textContent
-      };
-    });
+    // Add variables if enabled
+    if (document.getElementById('toggle-variables').checked) {
+      const variablesTable = document.querySelector('#variables-table tbody');
+      context.variables = Array.from(variablesTable.querySelectorAll('tr')).map(row => {
+        const cells = row.querySelectorAll('td');
+        return {
+          name: cells[0].textContent,
+          type: cells[1].textContent,
+          size: cells[2].textContent,
+          offset: cells[3].textContent
+        };
+      });
+    }
 
-    // Get strings from the current function
-    const stringsTable = document.querySelector('#strings-table tbody');
-    const strings = Array.from(stringsTable.querySelectorAll('tr')).map(row => {
-      const cells = row.querySelectorAll('td');
-      return {
-        address: cells[0].textContent,
-        value: cells[1].textContent,
-        type: cells[2].textContent
+    // Add xrefs if enabled
+    if (document.getElementById('toggle-xrefs').checked) {
+      const incomingXrefs = Array.from(document.querySelector('#incoming-xrefs-table tbody').querySelectorAll('tr')).map(row => {
+        const cells = row.querySelectorAll('td');
+        return {
+          name: cells[0].textContent,
+          address: cells[1].textContent,
+          offset: cells[2].textContent,
+          context: cells[3].textContent
+        };
+      });
+
+      const outgoingXrefs = Array.from(document.querySelector('#outgoing-xrefs-table tbody').querySelectorAll('tr')).map(row => {
+        const cells = row.querySelectorAll('td');
+        return {
+          name: cells[0].textContent,
+          address: cells[1].textContent,
+          offset: cells[2].textContent,
+          context: cells[3].textContent
+        };
+      });
+
+      context.xrefs = {
+        incoming: incomingXrefs,
+        outgoing: outgoingXrefs
       };
-    });
+    }
+
+    // Add strings if enabled
+    if (document.getElementById('toggle-strings').checked) {
+      const stringsTable = document.querySelector('#strings-table tbody');
+      context.strings = Array.from(stringsTable.querySelectorAll('tr')).map(row => {
+        const cells = row.querySelectorAll('td');
+        return {
+          address: cells[0].textContent,
+          value: cells[1].textContent,
+          type: cells[2].textContent
+        };
+      });
+    }
 
     // Create a temporary message div for the generating state
     const tempMessageDiv = document.createElement('div');
@@ -1114,18 +1138,7 @@ async function sendMessage() {
     console.log('[Chat] Sending request to backend...');
     const response = await window.electronAPI.sendChatMessage({
       message,
-      context: {
-        functionName: currentFunction,
-        pseudocode,
-        address,
-        assembly,
-        variables,
-        xrefs: {
-          incoming: incomingXrefs,
-          outgoing: outgoingXrefs
-        },
-        strings
-      },
+      context,
       session_id: currentSessionId
     });
 

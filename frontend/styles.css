@@ -1233,4 +1233,46 @@ table th {
 
 .message.assistant.thinking br {
   display: none;
+}
+
+.context-toggles {
+  padding: 8px;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-secondary);
+}
+
+.toggle-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background-color: var(--bg-tertiary);
+  cursor: pointer;
+  user-select: none;
+  font-size: 12px;
+  transition: background-color 0.2s;
+}
+
+.toggle-label:hover {
+  background-color: var(--bg-hover);
+}
+
+.toggle-label input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.toggle-label span {
+  color: var(--text-secondary);
+}
+
+.toggle-label input[type="checkbox"]:checked + span {
+  color: var(--text-primary);
 } 
