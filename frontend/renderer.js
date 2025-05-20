@@ -821,7 +821,24 @@ window.addEventListener('resize', () => {
 function addMessage(content, isUser = false) {
   const messageDiv = document.createElement('div');
   messageDiv.className = `message ${isUser ? 'user' : 'assistant'}`;
-  messageDiv.textContent = content;
+  if (isUser) {
+    messageDiv.textContent = content;
+  } else {
+    // Render markdown for assistant responses, sanitize, and highlight
+    if (window.marked && window.DOMPurify) {
+      const rawHtml = window.marked.parse(content);
+      const cleanHtml = window.DOMPurify.sanitize(rawHtml);
+      messageDiv.innerHTML = cleanHtml;
+      if (window.hljs) {
+        // Highlight code blocks
+        messageDiv.querySelectorAll('pre code').forEach((block) => {
+          window.hljs.highlightElement(block);
+        });
+      }
+    } else {
+      messageDiv.textContent = content;
+    }
+  }
   chatMessages.appendChild(messageDiv);
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
@@ -850,6 +867,31 @@ async function sendMessage() {
       pseudocode: pseudocode // Show actual pseudocode in log
     });
 
+    // Create a temporary message div for streaming
+    const tempMessageDiv = document.createElement('div');
+    tempMessageDiv.className = 'message assistant';
+    chatMessages.appendChild(tempMessageDiv);
+
+    let assistantReply = '';
+    // Listen for chat chunks
+    const chunkHandler = (event) => {
+      assistantReply += event.detail;
+      if (window.marked && window.DOMPurify) {
+        const rawHtml = window.marked.parse(assistantReply);
+        const cleanHtml = window.DOMPurify.sanitize(rawHtml);
+        tempMessageDiv.innerHTML = cleanHtml;
+        if (window.hljs) {
+          tempMessageDiv.querySelectorAll('pre code').forEach((block) => {
+            window.hljs.highlightElement(block);
+          });
+        }
+      } else {
+        tempMessageDiv.textContent = assistantReply;
+      }
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    };
+    window.addEventListener('chat-chunk', chunkHandler);
+
     // Send to backend
     console.log('[Chat] Sending request to backend...');
     const response = await window.electronAPI.sendChatMessage({
@@ -861,14 +903,28 @@ async function sendMessage() {
       }
     });
 
-    console.log('[Chat] Received response:', response);
+    // Remove the chunk handler
+    window.removeEventListener('chat-chunk', chunkHandler);
+
+    console.log('[Chat] Received complete response:', response);
 
     if (!response || !response.reply) {
       throw new Error('Invalid response format from backend');
     }
 
-    // Add assistant response
-    addMessage(response.reply);
+    // Update the final message
+    if (window.marked && window.DOMPurify) {
+      const rawHtml = window.marked.parse(response.reply);
+      const cleanHtml = window.DOMPurify.sanitize(rawHtml);
+      tempMessageDiv.innerHTML = cleanHtml;
+      if (window.hljs) {
+        tempMessageDiv.querySelectorAll('pre code').forEach((block) => {
+          window.hljs.highlightElement(block);
+        });
+      }
+    } else {
+      tempMessageDiv.textContent = response.reply;
+    }
   } catch (error) {
     console.error('[Chat] Error sending message:', error);
     console.error('[Chat] Error details:', {

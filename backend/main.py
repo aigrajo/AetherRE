@@ -10,12 +10,14 @@ import openai
 import hashlib
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 import uvicorn
 from pydantic import BaseModel
 import time
 from datetime import datetime, timedelta
 from collections import deque
 from dotenv import load_dotenv
+import asyncio
 
 # Load environment variables from .env file
 load_dotenv()
@@ -394,8 +396,8 @@ def get_cache_key(message: str, context: Dict[str, Any]) -> str:
     }
     return hashlib.md5(json.dumps(cache_data, sort_keys=True).encode()).hexdigest()
 
-async def handle_chat_message(message: str, context: Dict[str, Any]) -> Dict[str, str]:
-    """Handle chat messages with OpenAI API."""
+async def stream_chat_response(message: str, context: Dict[str, Any]):
+    """Stream chat responses from OpenAI API."""
     print(f"[Chat] Received message: {message}", file=sys.stderr)
     print(f"[Chat] Context: {json.dumps(context, indent=2)}", file=sys.stderr)
     
@@ -403,7 +405,9 @@ async def handle_chat_message(message: str, context: Dict[str, Any]) -> Dict[str
     allowed, error_message = check_rate_limit()
     if not allowed:
         print(f"[Chat] Rate limit exceeded: {error_message}", file=sys.stderr)
-        return {'reply': f"Rate limit exceeded. Please try again later. {error_message}"}
+        yield f"data: {json.dumps({'reply': f'Rate limit exceeded. Please try again later. {error_message}'})}\n\n"
+        await asyncio.sleep(0)
+        return
     
     cache_key = get_cache_key(message, context)
     print(f"[Chat] Cache key: {cache_key}", file=sys.stderr)
@@ -411,7 +415,9 @@ async def handle_chat_message(message: str, context: Dict[str, Any]) -> Dict[str
     # Check cache first
     if cache_key in chat_cache:
         print(f"[Chat] Cache hit for key: {cache_key}", file=sys.stderr)
-        return {'reply': chat_cache[cache_key]}
+        yield f"data: {json.dumps({'reply': chat_cache[cache_key]})}\n\n"
+        await asyncio.sleep(0)
+        return
     
     print("[Chat] Cache miss, calling OpenAI API", file=sys.stderr)
     
@@ -435,7 +441,7 @@ Please provide a clear and concise response focusing on the reverse engineering 
             raise ValueError("OpenAI API key not found in environment variables")
             
         print("[Chat] Calling OpenAI API...", file=sys.stderr)
-        # Call OpenAI API using the new format
+        # Call OpenAI API using the new format with streaming
         client = openai.OpenAI()
         response = client.chat.completions.create(
             model="gpt-4.1-nano",
@@ -444,39 +450,50 @@ Please provide a clear and concise response focusing on the reverse engineering 
                 {"role": "user", "content": prompt}
             ],
             max_tokens=500,
-            temperature=0.7
+            temperature=0.7,
+            stream=True
         )
         
-        reply = response.choices[0].message.content.strip()
-        print(f"[Chat] Received response from OpenAI: {reply[:100]}...", file=sys.stderr)
+        full_reply = ""
+        for chunk in response:
+            if chunk.choices[0].delta.content:
+                content = chunk.choices[0].delta.content
+                full_reply += content
+                yield f"data: {json.dumps({'reply': content})}\n\n"
+                await asyncio.sleep(0)
         
-        # Cache the response
-        chat_cache[cache_key] = reply
+        # Cache the complete response
+        chat_cache[cache_key] = full_reply
         print(f"[Chat] Cached response for key: {cache_key}", file=sys.stderr)
         
-        return {'reply': reply}
     except ValueError as ve:
         print(f"[Chat] Configuration error: {str(ve)}", file=sys.stderr)
-        return {'reply': "Configuration error: OpenAI API key not found. Please check your environment variables."}
+        yield f"data: {json.dumps({'reply': 'Configuration error: OpenAI API key not found. Please check your environment variables.'})}\n\n"
+        await asyncio.sleep(0)
     except openai.AuthenticationError as ae:
         print(f"[Chat] Authentication error: {str(ae)}", file=sys.stderr)
-        return {'reply': "Authentication error: Invalid OpenAI API key. Please check your credentials."}
+        yield f"data: {json.dumps({'reply': 'Authentication error: Invalid OpenAI API key. Please check your credentials.'})}\n\n"
+        await asyncio.sleep(0)
     except openai.RateLimitError as re:
         print(f"[Chat] Rate limit error: {str(re)}", file=sys.stderr)
-        return {'reply': "Rate limit exceeded. Please try again in a few moments."}
+        yield f"data: {json.dumps({'reply': 'Rate limit exceeded. Please try again in a few moments.'})}\n\n"
+        await asyncio.sleep(0)
     except Exception as e:
         print(f"[Chat] Unexpected error: {str(e)}", file=sys.stderr)
         print(f"[Chat] Error type: {type(e)}", file=sys.stderr)
         import traceback
         print(f"[Chat] Traceback: {traceback.format_exc()}", file=sys.stderr)
-        return {'reply': "I apologize, but I encountered an error processing your request. Please try again."}
+        yield f"data: {json.dumps({'reply': 'I apologize, but I encountered an error processing your request. Please try again.'})}\n\n"
+        await asyncio.sleep(0)
 
-@app.post("/api/chat", response_model=ChatResponse)
+@app.post("/api/chat")
 async def chat_endpoint(request: ChatRequest):
     try:
         print(f"[Chat API] Received request: {request.message}", file=sys.stderr)
-        result = await handle_chat_message(request.message, request.context)
-        return result
+        return StreamingResponse(
+            stream_chat_response(request.message, request.context),
+            media_type="text/event-stream"
+        )
     except Exception as e:
         print(f"[Chat API] Error handling request: {str(e)}", file=sys.stderr)
         raise HTTPException(status_code=500, detail=str(e))

@@ -197,6 +197,7 @@ IF NOT !ERRORLEVEL! == 0 (
 )
 cd "%PROJECT_ROOT%"
 
-echo [+] Setup complete! You can now run run_aetherre.bat to start the application.
+echo [+] Setup complete. 
+echo [+] You can now run run_aetherre.bat to start the application.
 pause
 endlocal 
