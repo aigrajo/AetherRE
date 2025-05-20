@@ -31,7 +31,7 @@ The setup script will automatically check for and verify these requirements:
    - Check and verify all required dependencies
    - Set up Ghidra (if not already installed)
    - Create necessary directories (temp, data)
-   - Install npm dependencies
+   - Install all npm dependencies in the root directory
 
 3. **Set up Python environment:**
    ```sh
@@ -40,11 +40,6 @@ The setup script will automatically check for and verify these requirements:
    pip install --upgrade pip
    pip install -r requirements.txt
    ```
-   This will:
-   - Create a virtual environment
-   - Activate the virtual environment
-   - Upgrade pip to the latest version
-   - Install all required Python packages
 
 4. **Start the application:**
    ```sh
@@ -69,7 +64,7 @@ AetherRE/
 │   ├── styles.css     # Application styles
 │   ├── renderer.js    # Main renderer process
 │   ├── resize.js      # Panel resizing functionality
-│   └── package.json   # Frontend dependencies
+│   └── main.js        # Electron main process
 ├── backend/           # Python backend
 │   ├── main.py       # FastAPI server
 │   └── chat.py       # AI chat functionality
@@ -80,7 +75,9 @@ AetherRE/
 ├── tools/             # Downloaded tools (Ghidra)
 ├── temp/              # Temporary Ghidra project files
 ├── venv/              # Python virtual environment
+├── node_modules/      # Node.js dependencies
 ├── requirements.txt   # Python dependencies
+├── package.json      # Node.js dependencies configuration
 ├── setup.bat         # Initial setup script
 ├── run_aetherre.bat  # Application launcher
 └── config.json       # Project configuration
@@ -131,7 +128,6 @@ If you encounter issues during setup:
 - AI-powered analysis assistant
 - Real-time binary analysis with Ghidra
 - Cross-references
-
 - String and data reference analysis
 - Variable and type analysis
 - Assembly and pseudocode views

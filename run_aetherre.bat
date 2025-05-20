@@ -57,7 +57,7 @@ timeout /t 2 /nobreak >nul
 
 :: Start the GUI
 echo [*] Starting AetherRE GUI...
-cd "%PROJECT_ROOT%frontend"
+cd "%PROJECT_ROOT%"
 start cmd /c "npm start"
 
 :: Cleanup on exit
