@@ -40,7 +40,13 @@ The setup script will automatically check for and verify these requirements:
    pip install -r requirements.txt
    ```
 
-4. **Start the application:**
+4. **Create a .env file with your OpenAI API key:**
+   ```sh
+   echo OPENAI_API_KEY=your_api_key_here > .env
+   ```
+   Replace `your_api_key_here` with your actual OpenAI API key.
+
+5. **Start the application:**
    ```sh
    run_aetherre.bat
    ```
@@ -60,26 +66,35 @@ The setup script will automatically check for and verify these requirements:
 AetherRE/
 ├── frontend/           # Electron GUI application
 │   ├── index.html     # Main application window
-│   ├── styles.css     # Application styles
+│   ├── main.js        # Electron main process
+│   ├── preload.js     # Preload script for renderer
 │   ├── renderer.js    # Main renderer process
 │   ├── resize.js      # Panel resizing functionality
-│   └── main.js        # Electron main process
+│   ├── styles/        # CSS stylesheets
+│   ├── renderer/      # Renderer modules
+│   └── assets/        # Static assets
 ├── backend/           # Python backend
-│   ├── main.py       # FastAPI server
-│   └── chat.py       # AI chat functionality
+│   ├── __init__.py    # Package initialization
+│   ├── main.py        # FastAPI server
+│   ├── ghidra_extract.py # Ghidra integration
+│   ├── api/           # API endpoints
+│   ├── config/        # Configuration
+│   ├── services/      # Service modules
+│   │   └── chat.py    # AI chat functionality
+│   └── utils/         # Utility functions
 ├── scripts/           # Automation scripts
-│   ├── setup_ghidra.ps1    # Ghidra setup script
-│   └── run_ghidra_headless.bat  # Headless analysis
 ├── data/              # Extracted function data (JSON)
 ├── tools/             # Downloaded tools (Ghidra)
 ├── temp/              # Temporary Ghidra project files
+├── tests/             # Test files
 ├── venv/              # Python virtual environment
 ├── node_modules/      # Node.js dependencies
 ├── requirements.txt   # Python dependencies
-├── package.json      # Node.js dependencies configuration
-├── setup.bat         # Initial setup script
-├── run_aetherre.bat  # Application launcher
-└── config.json       # Project configuration
+├── package.json       # Node.js dependencies configuration
+├── setup.bat          # Initial setup script
+├── run_aetherre.bat   # Application launcher
+├── config.json        # Project configuration
+└── ROADMAP.md         # Project roadmap
 ```
 
 ### Using the Application
