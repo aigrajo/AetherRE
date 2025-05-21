@@ -536,6 +536,19 @@ async def stream_chat_response(message: str, context: Dict[str, Any], session_id
         for string in context['strings']:
             strings_text += f"- {string['value']} at {string['address']}\n"
 
+    # Format CFG
+    cfg_text = ""
+    if context.get('cfg'):
+        cfg = context['cfg']
+        cfg_text = "\nControl Flow Graph:\n"
+        for node in cfg['nodes']:
+            cfg_text += f"\nNode at {node['address']}:\n"
+            for instr in node['instructions']:
+                cfg_text += f"  {instr['mnemonic']} {instr['operands']}\n"
+        cfg_text += "\nEdges:\n"
+        for edge in cfg['edges']:
+            cfg_text += f"- {edge['source']} -> {edge['target']}\n"
+
     # Add current context
     context_prompt = f"""
 Function Context:
@@ -548,6 +561,7 @@ Pseudocode Analysis:
 {variables_text}
 {xrefs_text}
 {strings_text}
+{cfg_text}
 """
     messages.append({"role": "system", "content": context_prompt})
 

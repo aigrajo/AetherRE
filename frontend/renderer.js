@@ -1117,6 +1117,20 @@ function showNodeDetails(node) {
   detailsPanel.appendChild(instructionsList);
 }
 
+// Function to setup context toggle checkboxes
+function setupContextToggles() {
+  // Get all toggle checkboxes
+  const toggles = document.querySelectorAll('.toggle-label input[type="checkbox"]');
+  
+  // Add event listeners to each toggle
+  toggles.forEach(toggle => {
+    toggle.addEventListener('change', () => {
+      console.log(`Toggle ${toggle.id} changed to ${toggle.checked}`);
+      // Additional logic can be added here if needed for specific toggles
+    });
+  });
+}
+
 // Function to initialize everything
 function init() {
   initMonacoEditor();
@@ -1126,7 +1140,6 @@ function init() {
   
   // Initialize chat functionality
   initializeChatSession();
-  initializeChatUI();
   
   // Setup event handlers for context toggles
   setupContextToggles();
@@ -1539,40 +1552,25 @@ async function sendMessage() {
   }
 }
 
-// Initialize chat functionality
-function initializeChatUI() {
-  // Ensure we have valid DOM elements before attaching event listeners
-  const chatInput = document.getElementById('chat-input');
-  const chatMessages = document.getElementById('chat-messages');
-  
-  if (!chatInput || !chatMessages) {
-    console.error('[Chat] Could not find chat input or messages elements');
-    return;
+// Event listeners for chat
+chatInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
   }
-  
-  // Re-attach event listeners for chat input
-  chatInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  });
-  
-  chatInput.addEventListener('input', function() {
-    this.style.height = 'auto';
-    this.style.height = (this.scrollHeight) + 'px';
-    // Toggle at-max-height class for scrollbar
-    if (this.scrollHeight >= 144) {
-      this.classList.add('at-max-height');
-    } else {
-      this.classList.remove('at-max-height');
-    }
-  });
-  
-  console.log('[Chat] Chat UI initialization complete');
-}
+});
 
-// Also add an event handler to re-initialize after DOMContentLoaded
+chatInput.addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = (this.scrollHeight) + 'px';
+  // Toggle at-max-height class for scrollbar
+  if (this.scrollHeight >= 144) {
+    this.classList.add('at-max-height');
+  } else {
+    this.classList.remove('at-max-height');
+  }
+});
+
 window.addEventListener('DOMContentLoaded', () => {
   // Force Monaco editors to layout
   if (window.monacoEditor && window.monacoEditor.layout) window.monacoEditor.layout();
@@ -1581,8 +1579,6 @@ window.addEventListener('DOMContentLoaded', () => {
   window.dispatchEvent(new Event('resize'));
   // Initialize chat session when the page loads
   initializeChatSession();
-  // Make sure chat event listeners are attached
-  initializeChatUI();
 });
 
 const deleteChatBtn = document.getElementById('delete-chat-btn');
