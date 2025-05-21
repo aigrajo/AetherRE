@@ -48,10 +48,14 @@ class ChatSession:
             # Truncate message if too long
             truncated_message = first_message[:100]
             
+            # Get current function and context information
+            function_name = getattr(self, 'function_name', 'Unknown Function')
+            active_context = getattr(self, 'active_context', [])
+            
             # Create a prompt for name generation
             messages = [
-                {"role": "system", "content": "Generate a short, descriptive title (max 5 words) for a chat based on the first message. The title should capture the main topic or question."},
-                {"role": "user", "content": f"First message: {truncated_message}"}
+                {"role": "system", "content": "Generate a short, descriptive title (max 6 words) for a chat based on the first message, function being analyzed, and active context toggles. The title should capture the main topic or question."},
+                {"role": "user", "content": f"First message: {truncated_message}\nFunction: {function_name}\nActive context: {', '.join(active_context)}"}
             ]
             
             # Call OpenAI API to generate name
@@ -251,11 +255,12 @@ def get_all_sessions() -> List[Dict[str, Any]]:
     return [
         {
             "session_id": session_id,
-            "name": session.name or f"Chat {session_id[:8]}",
+            "name": session.name,  # Only use the generated name
             "created_at": session.created_at.isoformat(),
             "last_activity": session.last_activity.isoformat(),
             "message_count": len(session.messages),
             "messages": session.messages
         }
         for session_id, session in chat_sessions.items()
+        if session_id is not None and len(session.messages) > 0 and session.name is not None
     ] 

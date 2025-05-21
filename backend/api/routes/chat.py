@@ -14,7 +14,9 @@ from backend.services.chat import (
     create_new_session, 
     clear_session, 
     delete_session, 
-    get_all_sessions
+    get_all_sessions,
+    chat_sessions,
+    ChatSession
 )
 from backend.config.settings import DATA_DIR, GHIDRA_HEADLESS_SCRIPT
 from backend.utils.helpers import analyze_xrefs
@@ -26,6 +28,24 @@ async def chat_endpoint(request: ChatRequest):
     """Chat endpoint for sending messages to the AI assistant."""
     try:
         print(f"[Chat API] Received request: {request.message}", file=sys.stderr)
+        
+        # Get function and context information from the request
+        function_name = request.context.get('functionName', 'Unknown Function')
+        active_context = []
+        
+        # Get active context toggles
+        for key, value in request.context.items():
+            if key.startswith('toggle_') and value:
+                active_context.append(key.replace('toggle_', ''))
+        
+        # Create or get session
+        if request.session_id not in chat_sessions:
+            chat_sessions[request.session_id] = ChatSession(request.session_id)
+            
+        # Set function and context information
+        chat_sessions[request.session_id].function_name = function_name
+        chat_sessions[request.session_id].active_context = active_context
+        
         return StreamingResponse(
             stream_chat_response(request.message, request.context, request.session_id),
             media_type="text/event-stream"
