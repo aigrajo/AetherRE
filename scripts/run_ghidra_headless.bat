@@ -6,6 +6,7 @@ set "PROJECT_ROOT=%~dp0..\"
 set "GHIDRA_HOME=%PROJECT_ROOT%tools\ghidra\ghidra_10.4_PUBLIC"
 set "PROJECT_DIR=%PROJECT_ROOT%temp"
 set "SCRIPT_DIR=%PROJECT_ROOT%scripts"
+set "BACKEND_DIR=%PROJECT_ROOT%backend"
 set "OUTPUT_DIR=%PROJECT_ROOT%data"
 
 :: Parse command line arguments
@@ -80,7 +81,7 @@ if not exist "%OUTPUT_DIR%" mkdir "%OUTPUT_DIR%"
 
 :: Debug: Echo the command to be run
 echo Command to be executed:
-echo "%GHIDRA_HOME%\support\analyzeHeadless.bat" "%PROJECT_DIR%" %PROJECT_NAME% -import "!BINARY!" -overwrite -scriptPath "%SCRIPT_DIR%" -postScript ghidra_extract.py -deleteProject
+echo "%GHIDRA_HOME%\support\analyzeHeadless.bat" "%PROJECT_DIR%" %PROJECT_NAME% -import "!BINARY!" -overwrite -scriptPath "%BACKEND_DIR%" -postScript ghidra_extract.py -deleteProject
 echo.
 echo Output directory: %OUTPUT_DIR%
 
@@ -88,7 +89,7 @@ echo [PROGRESS] 20
 
 :: Run headless analysis
 set "GHIDRA_OUTPUT_DIR=%OUTPUT_DIR%"
-"%GHIDRA_HOME%\support\analyzeHeadless.bat" "%PROJECT_DIR%" %PROJECT_NAME% -import "!BINARY!" -overwrite -scriptPath "%SCRIPT_DIR%" -postScript ghidra_extract.py -deleteProject
+"%GHIDRA_HOME%\support\analyzeHeadless.bat" "%PROJECT_DIR%" %PROJECT_NAME% -import "!BINARY!" -overwrite -scriptPath "%BACKEND_DIR%" -postScript ghidra_extract.py -deleteProject
 
 echo [PROGRESS] 80
 

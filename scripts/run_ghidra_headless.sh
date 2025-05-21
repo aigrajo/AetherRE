@@ -12,7 +12,8 @@ PROJECT_DIR=$2
 PROJECT_NAME=$3
 BINARY_FILE=$4
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
-EXTRACTOR_SCRIPT="${SCRIPT_DIR}/ghidra_extract.py"
+BACKEND_DIR="$(realpath "$SCRIPT_DIR/../backend")"
+EXTRACTOR_SCRIPT="${BACKEND_DIR}/ghidra_extract.py"
 
 echo "[+] Starting Ghidra headless analysis..."
 echo "[+] Ghidra path: $GHIDRA_PATH"
