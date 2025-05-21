@@ -132,14 +132,20 @@ const CFGVisualizer = {
       const layer = nodeLayer[idx];
       const layerNodes = layers[layer];
       const layerIndex = layerNodes.indexOf(idx);
-      const x = (layerIndex + 1) * (800 / (layerNodes.length + 1));
-      const y = (layer + 1) * 150;
+      
+      // Increase horizontal spacing between nodes to prevent overlaps
+      const horizontalSpacing = 1200; // Increased from 1000
+      const x = (layerIndex + 1) * (horizontalSpacing / (layerNodes.length + 1));
+      
+      // Add vertical spacing between layers
+      const verticalSpacing = 250; // Increased from 200
+      const y = (layer + 1) * verticalSpacing;
       
       return {
         id: node.id,
         x: x,
         y: y,
-        width: node.width || 180,
+        width: node.width || 250, // Match the width in cfgVisualizer.js
         height: node.height || 100
       };
     });

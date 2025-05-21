@@ -24,8 +24,9 @@ export function updateCFGTab(func) {
   
   // Create a new canvas for drawing the CFG
   const canvasElement = document.createElement('canvas');
-  canvasElement.width = cfgCanvas.clientWidth;
-  canvasElement.height = cfgCanvas.clientHeight;
+  const pixelRatio = window.devicePixelRatio || 1;
+  canvasElement.width = cfgCanvas.clientWidth * pixelRatio;
+  canvasElement.height = cfgCanvas.clientHeight * pixelRatio;
   canvasElement.style.width = '100%';
   canvasElement.style.height = '100%';
   cfgCanvas.appendChild(canvasElement);
@@ -38,20 +39,24 @@ export function updateCFGTab(func) {
     isDragging: false,
     lastX: 0,
     lastY: 0,
-    selectedNode: null
+    selectedNode: null,
+    pixelRatio: pixelRatio
   };
   
   // Prepare node and edge data
   const nodes = func.cfg.nodes.map(node => {
     const instructionCount = node.instructions.length;
     // Calculate node dimensions based on content
+    // Ensure height can accommodate up to 11 lines (10 instructions + 1 "more" line)
+    // 25px header + 15px per instruction line + 15px padding
+    const minHeight = 25 + (Math.min(instructionCount, 10) * 15) + (instructionCount > 10 ? 15 : 0) + 15;
     return {
       id: node.id,
       address: node.start_address,
       endAddress: node.end_address,
       instructions: node.instructions,
-      width: 200,
-      height: Math.max(80, 20 + instructionCount * 15)
+      width: 250, // Increased width
+      height: Math.max(80, minHeight)
     };
   });
   
@@ -88,7 +93,8 @@ export function updateCFGTab(func) {
     
     // Apply view transformations
     ctx.save();
-    ctx.translate(width / 2 + viewState.offsetX, 50 + viewState.offsetY);
+    ctx.scale(viewState.pixelRatio, viewState.pixelRatio);
+    ctx.translate(width / (2 * viewState.pixelRatio) + viewState.offsetX, 50 + viewState.offsetY);
     ctx.scale(viewState.scale, viewState.scale);
     
     // Draw edges
@@ -167,8 +173,9 @@ export function updateCFGTab(func) {
       ctx.fillStyle = '#E4E4E4';
       ctx.font = '12px monospace';
       
-      // Show up to 3 instructions
-      const maxInstructions = Math.min(3, node.instructions.length);
+      // Show up to 10 instructions
+      const maxInstructions = Math.min(10, node.instructions.length);
+      
       for (let i = 0; i < maxInstructions; i++) {
         const instr = node.instructions[i];
         const text = `${instr.mnemonic} ${instr.operands}`;
@@ -179,13 +186,13 @@ export function updateCFGTab(func) {
         );
       }
       
-      // Show count of remaining instructions
-      if (node.instructions.length > maxInstructions) {
+      // Show count of remaining instructions as 11th line if there are more
+      if (node.instructions.length > 10) {
         ctx.fillStyle = '#A0A0A0';
         ctx.fillText(
-          `+ ${node.instructions.length - maxInstructions} more...`,
+          `+ ${node.instructions.length - 10} more...`,
           x + 10,
-          y + 40 + (maxInstructions * 15)
+          y + 40 + (10 * 15)
         );
       }
     });
@@ -204,11 +211,11 @@ export function updateCFGTab(func) {
   // Helper to convert event coordinates to graph coordinates
   function eventToGraphCoords(e) {
     const rect = canvasElement.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / (rect.right - rect.left) * canvasElement.width;
-    const y = (e.clientY - rect.top) / (rect.bottom - rect.top) * canvasElement.height;
+    const x = (e.clientX - rect.left) / (rect.right - rect.left) * canvasElement.width / viewState.pixelRatio;
+    const y = (e.clientY - rect.top) / (rect.bottom - rect.top) * canvasElement.height / viewState.pixelRatio;
     
     // Invert the view transformations
-    const graphX = (x - canvasElement.width / 2 - viewState.offsetX) / viewState.scale;
+    const graphX = (x - canvasElement.width / (2 * viewState.pixelRatio) - viewState.offsetX) / viewState.scale;
     const graphY = (y - 50 - viewState.offsetY) / viewState.scale;
     
     return { x: graphX, y: graphY };
@@ -320,8 +327,10 @@ export function updateCFGTab(func) {
   
   // Handle window resize
   const resizeObserver = new ResizeObserver(() => {
-    canvasElement.width = cfgCanvas.clientWidth;
-    canvasElement.height = cfgCanvas.clientHeight;
+    const pixelRatio = window.devicePixelRatio || 1;
+    viewState.pixelRatio = pixelRatio;
+    canvasElement.width = cfgCanvas.clientWidth * pixelRatio;
+    canvasElement.height = cfgCanvas.clientHeight * pixelRatio;
     drawCFG();
   });
   
