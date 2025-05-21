@@ -8,9 +8,18 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles/index.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/loader.min.js"></script>
   <!-- No external visualization libraries - we'll implement our own solution -->
+  
+  <!-- Markdown parser -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- Security: HTML sanitizer to prevent XSS -->
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.5/dist/purify.min.js"></script>
+  <!-- Syntax highlighting for code blocks -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
 </head>
 <body>
   <div class="app-container">
@@ -232,21 +241,53 @@
           <!-- Messages will be dynamically added here -->
         </div>
         <div class="chat-input-container">
-          <textarea id="chat-input" placeholder="Ask about the current function..."></textarea>
+          <textarea id="chat-input" placeholder="Ask about the current function..." onkeypress="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); }"></textarea>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Markdown parser -->
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <!-- Security: HTML sanitizer to prevent XSS -->
-  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.5/dist/purify.min.js"></script>
-  <!-- Syntax highlighting for code blocks -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github-dark.min.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
-  <script>hljs.highlightAll();</script>
+  <!-- Main application script -->
   <script type="module" src="renderer.js"></script>
-  <script src="resize.js"></script>
+  
+  <!-- Debug script -->
+  <script>
+    // This script runs after everything is loaded
+    window.addEventListener('load', function() {
+      console.log('DEBUG: Window loaded event fired');
+      
+      // Check if key elements exist
+      const chatInput = document.getElementById('chat-input');
+      console.log('DEBUG: Chat input exists:', !!chatInput);
+      
+      const loadFileBtn = document.getElementById('load-file-btn');
+      console.log('DEBUG: Load file button exists:', !!loadFileBtn);
+      
+      // Check for Electron API
+      console.log('DEBUG: window.electronAPI exists:', !!window.electronAPI);
+      if (window.electronAPI) {
+        console.log('DEBUG: electronAPI methods:', Object.keys(window.electronAPI));
+      }
+      
+      // Test if we can attach our own event listeners
+      if (chatInput) {
+        console.log('DEBUG: Attempting to attach debug event listener to chat input');
+        chatInput.addEventListener('keypress', function(e) {
+          console.log('DEBUG: Keypress in chat input:', e.key);
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            console.log('DEBUG: Enter key pressed in chat input');
+          }
+        });
+      }
+      
+      if (loadFileBtn) {
+        console.log('DEBUG: Attempting to attach debug event listener to load button');
+        loadFileBtn.addEventListener('click', function() {
+          console.log('DEBUG: Load button clicked via debug listener');
+        });
+      }
+    });
+  </script>
 </body>
 </html> 

@@ -1,0 +1,80 @@
+/* Function List Styles */
+
+/* Sidebar */
+.sidebar {
+  /* width: 280px; */
+  min-width: 200px;
+  max-width: 400px;
+  width: 100%;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.function-list-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px;
+}
+
+.function-list-container h2 {
+  font-size: 13px;
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+#function-filter {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  margin-bottom: 12px;
+  transition: all 0.2s ease;
+}
+
+#function-filter:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 1px var(--glow-color);
+}
+
+#function-list {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.function-item {
+  padding: 8px 10px;
+  border-radius: 4px;
+  margin-bottom: 2px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s ease;
+  color: var(--text-primary);
+  background: transparent;
+  text-decoration: none;
+}
+
+.function-item:hover {
+  background: var(--hover-color);
+  color: #FFFFFF;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+  text-decoration: none;
+}
+
+.function-item.selected {
+  background: var(--selection-color);
+  color: #FFFFFF;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+  text-decoration: none;
+} 

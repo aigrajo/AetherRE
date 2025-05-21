@@ -10,6 +10,7 @@ import {
   setupChatEventListeners, 
   setupContextToggles 
 } from './chat.js';
+import { PanelResizer } from '../resize.js';
 
 // Initialize core module immediately to make state available
 console.log('Initializing core module...');
@@ -55,6 +56,10 @@ async function initApp() {
   // Setup context toggles
   console.log('Setting up context toggles...');
   setupContextToggles();
+
+  // Initialize panel resizer
+  console.log('Initializing panel resizer...');
+  new PanelResizer();
   
   // Ensure state variables are exposed as globals for compatibility
   console.log('Exposing globals for compatibility...');

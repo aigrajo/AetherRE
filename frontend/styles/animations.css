@@ -1,0 +1,85 @@
+/* Animations and Loading States */
+
+/* Loading indicator for chat */
+.chat-loading {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--text-secondary);
+  border-radius: 50%;
+  border-top-color: transparent;
+  animation: spin 1s linear infinite;
+  margin-right: 8px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Remove old cursor styles */
+.ai-thinking-cursor {
+  display: none;
+}
+
+.message.assistant.generating {
+  color: var(--text-secondary);
+  font-style: italic;
+  position: relative;
+  background: linear-gradient(
+    90deg,
+    var(--bg-secondary) 0%,
+    var(--text-secondary) 50%,
+    var(--bg-secondary) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: loading 2s infinite linear;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: -100% 50%;
+  }
+}
+
+.message.assistant.thinking {
+  display: block;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: 1.6;
+}
+
+.message.assistant.thinking span {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Fix spacing during typing state */
+.message.assistant.thinking p {
+  display: inline;
+  margin: 0;
+  line-height: inherit;
+}
+
+.message.assistant.thinking p:not(:last-child) {
+  margin-bottom: 0;
+  display: inline;
+}
+
+/* Override any markdown spacing during typing */
+.message.assistant.thinking * {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.message.assistant.thinking br {
+  display: none;
+} 

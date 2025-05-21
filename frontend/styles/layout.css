@@ -1,0 +1,140 @@
+/* Layout Components */
+
+/* App container */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* App header */
+.app-header {
+  background: var(--bg-secondary);
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  height: 52px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.app-header h1 {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.current-file {
+  font-family: var(--font-mono, 'SF Mono', 'Fira Code', 'Consolas', monospace);
+  color: var(--text-secondary);
+  margin-left: 12px;
+  font-weight: 400;
+  opacity: 0.8;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Progress bar */
+.progress-container {
+  display: none;  /* Will be changed to flex when visible */
+  align-items: center;
+  gap: 12px;
+  min-width: 300px;
+}
+
+.progress-text {
+  color: var(--text-secondary);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.progress-bar {
+  width: 150px;
+  background: var(--bg-primary);
+  border-radius: 4px;
+  height: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  background: var(--accent-color);
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.action-button {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  padding: 6px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.action-button:hover {
+  background: var(--hover-color);
+  border-color: var(--accent-color);
+}
+
+/* Hide load button during analysis */
+.app-header.analyzing .action-button {
+  display: none;
+}
+
+/* Main content */
+.main-content {
+  display: grid;
+  grid-template-columns: 280px 1fr 300px;
+  height: calc(100vh - 60px);
+  position: relative;
+}
+
+/* Resizable panels */
+.resizable {
+  position: relative;
+  overflow: hidden;
+}
+
+.resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: transparent;
+  cursor: col-resize;
+  z-index: 100;
+  transition: background-color 0.2s ease;
+}
+
+.resize-handle:hover,
+.resize-handle.dragging {
+  background-color: var(--accent-color);
+}
+
+.resize-handle.left {
+  right: 0;
+}
+
+.resize-handle.right {
+  left: 0;
+}
+
+/* File Actions */
+.file-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+} 

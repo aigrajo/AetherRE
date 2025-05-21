@@ -1,0 +1,226 @@
+/* Cross References Styles */
+
+/* XRef specific styles */
+.xref-controls {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.xref-filters select {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.xref-filters select:focus {
+  outline: none;
+  border-color: var(--accent-color);
+}
+
+.xref-section h3 {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* XRef type badges */
+.xref-type {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.xref-type.direct { background: #2D5A27; }
+.xref-type.indirect { background: #154875; }
+.xref-type.jump { background: #744B00; }
+.xref-type.data { background: #4A1356; }
+.xref-type.import { background: #2F3E47; }
+
+/* Xref lists */
+.xref-section {
+  background-color: var(--bg-secondary);
+  border-radius: 4px;
+  padding: 1rem;
+  transition: all 0.3s ease;
+  margin-bottom: 1.5rem;
+}
+
+.xref-section:last-child {
+  margin-bottom: 0;
+}
+
+.xref-section[style*="display: none"] {
+  height: 0;
+  padding: 0;
+  margin: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.xref-section[style*="display: block"] {
+  height: auto;
+  opacity: 1;
+}
+
+/* Cross References Tab Styles */
+.xref-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.xref-list-container {
+  overflow-x: auto;
+}
+
+#incoming-xrefs-table,
+#outgoing-xrefs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+#incoming-xrefs-table th,
+#outgoing-xrefs-table th {
+  text-align: left;
+  padding: 0.75rem;
+  background-color: var(--bg-primary);
+  border-bottom: 2px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+#incoming-xrefs-table td,
+#outgoing-xrefs-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+/* Xref table styles */
+#incoming-xrefs-table tr,
+#outgoing-xrefs-table tr {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+#incoming-xrefs-table tr:hover,
+#outgoing-xrefs-table tr:hover {
+  background-color: #2a2a2a;
+}
+
+#incoming-xrefs-table tr.selected,
+#outgoing-xrefs-table tr.selected {
+  background-color: #3a3a3a;
+}
+
+/* Function separator in xref tables */
+#incoming-xrefs-table tr.function-separator,
+#outgoing-xrefs-table tr.function-separator {
+  border-top: 2px solid #333;
+}
+
+/* Function separator hover effect */
+#incoming-xrefs-table tr.function-separator:hover,
+#outgoing-xrefs-table tr.function-separator:hover {
+  border-top-color: #444;
+}
+
+.xref-address {
+  font-family: monospace;
+  color: var(--text-primary);
+}
+
+.xref-offset {
+  font-family: monospace;
+  color: var(--text-primary);
+}
+
+.xref-context {
+  font-family: monospace;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.xref-stack-state {
+  font-family: monospace;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+}
+
+/* Function separator in XRef tables */
+.function-separator {
+  border-top: 4px solid var(--border-color);
+}
+
+/* Modern clickable element styles */
+.variable-name,
+.xref-link,
+.editable {
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.variable-name:hover,
+.xref-link:hover,
+.editable:hover {
+  color: #FFFFFF;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+  text-decoration: none;
+}
+
+/* Variable related styles */
+.variable-name {
+  color: var(--text-primary);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.variable-name:hover {
+  color: #FFFFFF;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+  text-decoration: none;
+}
+
+.editable {
+  cursor: pointer;
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.editable:hover {
+  color: #FFFFFF;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+  text-decoration: none;
+}
+
+.variable-rename-input {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 2px 4px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.variable-rename-input:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.1);
+} 

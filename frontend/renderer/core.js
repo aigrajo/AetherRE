@@ -36,6 +36,24 @@ export function exposeGlobals() {
   console.log("Global variables exposed and synchronized with state");
 }
 
+// Update UI when a file is loaded
+export function updateUIWithFile(fileName) {
+  // Update the document title
+  document.title = `AetherRE - ${fileName}`;
+  
+  // Update the header if needed
+  const headerElement = document.querySelector('.app-header h1');
+  if (headerElement) {
+    headerElement.textContent = 'AetherRE';
+    const fileSpan = document.createElement('span');
+    fileSpan.className = 'current-file';
+    fileSpan.textContent = fileName;
+    headerElement.appendChild(fileSpan);
+  }
+  
+  console.log(`UI updated with file: ${fileName}`);
+}
+
 // Main init function to initialize all modules
 export function init() {
   // The modules will be imported and initialized via the main renderer.js
@@ -124,6 +142,7 @@ export function findFunction(addressOrName) {
       addressOrName.substring(2) : 
       '0x' + addressOrName;
   
+  // Try to find with normalized address
   func = state.functionsData.functions.find(f => 
       f.address === normalizedAddr || 
       f.address === normalizedAddr.toLowerCase() || 
@@ -132,19 +151,10 @@ export function findFunction(addressOrName) {
   
   if (func) return func;
   
-  // Try case-insensitive name match
-  return state.functionsData.functions.find(f => 
+  // Try with normalized name (case insensitive)
+  func = state.functionsData.functions.find(f => 
       f.name.toLowerCase() === addressOrName.toLowerCase()
   );
-}
-
-// Update UI elements with the current file info
-export function updateUIWithFile(filename) {
-  if (!filename) return;
   
-  // Clean up the filename to make it more presentable
-  const cleanName = filename.replace(/\.[^/.]+$/, ''); // Remove file extension
-  
-  document.title = `AetherRE - ${cleanName}`;
-  document.querySelector('.app-header h1').innerHTML = `AetherRE <span class="current-file">${cleanName}</span>`;
+  return func;
 } 

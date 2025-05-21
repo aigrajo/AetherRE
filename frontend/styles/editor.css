@@ -1,0 +1,15 @@
+/* Editor-specific styles */
+
+/* Monaco editor specific styles */
+.monaco-editor .variable-name {
+  color: var(--text-primary) !important;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none !important;
+}
+
+.monaco-editor .variable-name:hover {
+  color: #FFFFFF !important;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+  text-decoration: none !important;
+} 

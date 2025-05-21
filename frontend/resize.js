@@ -1,4 +1,4 @@
-class PanelResizer {
+export class PanelResizer {
     constructor() {
         this.init();
     }
@@ -107,9 +107,4 @@ class PanelResizer {
             mainContent.style.gridTemplateColumns = `${sidebarWidth}px 1fr ${chatWidth}px`;
         }
     }
-}
-
-// Initialize panel resizer when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    new PanelResizer();
-}); 
+} 
