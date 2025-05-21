@@ -283,7 +283,7 @@ function displayFunctionInfo(func) {
     const pseudocode = func.pseudocode || '// No pseudocode available';
     monacoEditor.setValue(pseudocode);
   }
-  
+
   // Update tabs based on data availability
   updateAssemblyTab(func);
   updateXRefsTab(func);
@@ -1126,6 +1126,7 @@ function init() {
   
   // Initialize chat functionality
   initializeChatSession();
+  initializeChatUI();
   
   // Setup event handlers for context toggles
   setupContextToggles();
@@ -1538,25 +1539,40 @@ async function sendMessage() {
   }
 }
 
-// Event listeners for chat
-chatInput.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
+// Initialize chat functionality
+function initializeChatUI() {
+  // Ensure we have valid DOM elements before attaching event listeners
+  const chatInput = document.getElementById('chat-input');
+  const chatMessages = document.getElementById('chat-messages');
+  
+  if (!chatInput || !chatMessages) {
+    console.error('[Chat] Could not find chat input or messages elements');
+    return;
   }
-});
+  
+  // Re-attach event listeners for chat input
+  chatInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+  
+  chatInput.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = (this.scrollHeight) + 'px';
+    // Toggle at-max-height class for scrollbar
+    if (this.scrollHeight >= 144) {
+      this.classList.add('at-max-height');
+    } else {
+      this.classList.remove('at-max-height');
+    }
+  });
+  
+  console.log('[Chat] Chat UI initialization complete');
+}
 
-chatInput.addEventListener('input', function() {
-  this.style.height = 'auto';
-  this.style.height = (this.scrollHeight) + 'px';
-  // Toggle at-max-height class for scrollbar
-  if (this.scrollHeight >= 144) {
-    this.classList.add('at-max-height');
-  } else {
-    this.classList.remove('at-max-height');
-  }
-});
-
+// Also add an event handler to re-initialize after DOMContentLoaded
 window.addEventListener('DOMContentLoaded', () => {
   // Force Monaco editors to layout
   if (window.monacoEditor && window.monacoEditor.layout) window.monacoEditor.layout();
@@ -1565,6 +1581,8 @@ window.addEventListener('DOMContentLoaded', () => {
   window.dispatchEvent(new Event('resize'));
   // Initialize chat session when the page loads
   initializeChatSession();
+  // Make sure chat event listeners are attached
+  initializeChatUI();
 });
 
 const deleteChatBtn = document.getElementById('delete-chat-btn');
