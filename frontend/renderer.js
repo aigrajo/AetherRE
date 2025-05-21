@@ -1385,13 +1385,13 @@ async function sendMessage() {
 
   try {
     // Get current function context
-    const currentFunction = document.getElementById('function-name').textContent;
+    const functionName = document.getElementById('function-name').textContent;
     const pseudocode = document.getElementById('toggle-pseudocode').checked ? monacoEditor.getValue() : '';
     const address = document.getElementById('function-address').textContent;
 
     // Initialize context object with required fields
     const context = {
-      functionName: currentFunction,
+      functionName: functionName,
       address: address
     };
 
@@ -1468,6 +1468,27 @@ async function sendMessage() {
           type: cells[2].textContent
         };
       });
+    }
+
+    // Add CFG if enabled - with debug logging
+    console.log('[Chat] Debug - functionName:', functionName);
+    console.log('[Chat] Debug - global currentFunction:', currentFunction);
+    console.log('[Chat] Debug - CFG available:', currentFunction && currentFunction.cfg ? 'Yes' : 'No');
+    if (document.getElementById('toggle-cfg').checked && currentFunction && currentFunction.cfg) {
+      console.log('[Chat] Adding CFG data to context');
+      context.cfg = {
+        nodes: currentFunction.cfg.nodes.map(node => ({
+          id: node.id,
+          address: node.start_address,
+          endAddress: node.end_address,
+          instructions: node.instructions.slice(0, 5) // Limit to first 5 instructions to keep context size manageable
+        })),
+        edges: currentFunction.cfg.edges
+      };
+    } else {
+      console.log('[Chat] CFG toggle:', document.getElementById('toggle-cfg').checked);
+      console.log('[Chat] global currentFunction exists:', !!currentFunction);
+      console.log('[Chat] currentFunction.cfg exists:', !!(currentFunction && currentFunction.cfg));
     }
 
     // Create a temporary message div for the generating state
