@@ -1124,9 +1124,32 @@ function setupContextToggles() {
   
   // Add event listeners to each toggle
   toggles.forEach(toggle => {
+    const label = toggle.closest('.toggle-label');
+    
+    // Apply initial styling based on checked state
+    if (toggle.checked) {
+      label.style.backgroundColor = 'var(--accent-color)';
+      label.style.borderColor = 'var(--accent-color)';
+      label.style.color = 'var(--text-primary)';
+    } else {
+      label.style.backgroundColor = 'var(--bg-tertiary)';
+      label.style.borderColor = 'transparent';
+      label.style.color = 'var(--text-secondary)';
+    }
+    
     toggle.addEventListener('change', () => {
       console.log(`Toggle ${toggle.id} changed to ${toggle.checked}`);
-      // Additional logic can be added here if needed for specific toggles
+      
+      // Update visual style based on the checked state
+      if (toggle.checked) {
+        label.style.backgroundColor = 'var(--accent-color)';
+        label.style.borderColor = 'var(--accent-color)';
+        label.style.color = 'var(--text-primary)';
+      } else {
+        label.style.backgroundColor = 'var(--bg-tertiary)';
+        label.style.borderColor = 'transparent';
+        label.style.color = 'var(--text-secondary)';
+      }
     });
   });
 }

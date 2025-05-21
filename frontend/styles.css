@@ -728,13 +728,14 @@ table th {
 }
 
 .chat-sessions {
-  margin: 10px 0;
+  margin: 0;
   position: relative;
-  padding: 0 12px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .chat-sessions-select {
-  width: calc(100% - 24px);
+  width: 100%;
   padding: 8px 32px 8px 12px;
   border: 1px solid #2d2d2d;
   border-radius: 6px;
@@ -1239,42 +1240,75 @@ table th {
   padding: 8px;
   border-bottom: 1px solid var(--border-color);
   background-color: var(--bg-secondary);
+  overflow: hidden;
 }
 
 .toggle-group {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 4px; /* Space for scrollbar */
+}
+
+.toggle-group::-webkit-scrollbar {
+  height: 4px;
+}
+
+.toggle-group::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+.toggle-group::-webkit-scrollbar-thumb {
+  background-color: var(--border-color);
+  border-radius: 4px;
+}
+
+.toggle-group::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-secondary);
 }
 
 .toggle-label {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
+  justify-content: center;
+  padding: 6px 12px;
   border-radius: 4px;
   background-color: var(--bg-tertiary);
   cursor: pointer;
   user-select: none;
   font-size: 12px;
-  transition: background-color 0.2s;
+  transition: all 0.2s;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+  min-width: fit-content;
+}
+
+/* Hide actual checkboxes */
+.toggle-label input[type="checkbox"] {
+  display: none;
+}
+
+/* Unchecked state - grayed out */
+.toggle-label span {
+  color: inherit;
+}
+
+/* Checked state - active appearance */
+.toggle-label input[type="checkbox"]:checked + span {
+  color: var(--text-primary);
 }
 
 .toggle-label:hover {
   background-color: var(--bg-hover);
 }
 
-.toggle-label input[type="checkbox"] {
-  margin: 0;
-  cursor: pointer;
-}
-
-.toggle-label span {
-  color: var(--text-secondary);
-}
-
-.toggle-label input[type="checkbox"]:checked + span {
+.toggle-label input[type="checkbox"]:checked ~ .toggle-label {
+  background-color: var(--accent-color);
   color: var(--text-primary);
+  border-color: var(--accent-color);
 }
 
 /* CFG styling */
