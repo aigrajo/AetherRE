@@ -246,7 +246,8 @@
   width: 120px;
   padding: 6px 12px;
   font-size: 13px;
-  background-color: var(--bg-input);
+  background-color: #000000;
+  color: #ffffff;
   border: 1px solid var(--border-color);
   border-radius: 4px;
   color: var(--text-primary);

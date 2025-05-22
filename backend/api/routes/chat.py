@@ -20,6 +20,7 @@ from backend.services.chat import (
 )
 from backend.config.settings import DATA_DIR, GHIDRA_HEADLESS_SCRIPT
 from backend.utils.helpers import analyze_xrefs
+from backend.services.notes_service import get_note, get_tags
 
 router = APIRouter(prefix="/api/chat")
 
@@ -31,9 +32,89 @@ async def chat_endpoint(request: ChatRequest):
         
         # Get function and context information from the request
         function_name = request.context.get('functionName', 'Unknown Function')
-        active_context = []
+        binary_name = None
+        function_id = None
+        
+        # Log toggle states
+        toggles = {k: v for k, v in request.context.items() if k.startswith('toggle_')}
+        print(f"[Chat API] Toggle states: {toggles}", file=sys.stderr)
+        
+        # Check if we have direct binary name and function ID from context
+        binary_name = request.context.get('binaryName')
+        function_id = request.context.get('functionId')
+        
+        if binary_name and function_id:
+            print(f"[Chat API] Using binary/function from context: {binary_name}/{function_id}", file=sys.stderr)
+        else:
+            # Check if address is present in context
+            function_address = request.context.get('address')
+            if function_address:
+                # Remove '0x' prefix if present and convert to lowercase
+                function_id = function_address.replace('0x', '').lower()
+                print(f"[Chat API] Using function ID from address: {function_id}", file=sys.stderr)
+                
+                # For binary name, derive from function name or address
+                binary_name = request.context.get('binaryName')
+                if not binary_name and function_name:
+                    # Try to extract binary name from function name if it has format like "binary_name::function_name"
+                    if '::' in function_name:
+                        binary_name = function_name.split('::')[0]
+                        print(f"[Chat API] Extracted binary name from function name: {binary_name}", file=sys.stderr)
+                
+                if not binary_name and function_id:
+                    # Use a default binary name based on the first part of the function ID
+                    binary_name = f"binary_{function_id[:8]}"
+                    print(f"[Chat API] Using default binary name: {binary_name}", file=sys.stderr)
+                
+                # Clean binary name to ensure proper filesystem compatibility
+                if binary_name:
+                    binary_name = ''.join(c if c.isalnum() else '_' for c in binary_name)
+                    print(f"[Chat API] Cleaned binary name: {binary_name}", file=sys.stderr)
+        
+        # Check if notes toggle is enabled
+        if request.context.get('toggle_notes') == True:
+            print(f"[Chat API] Notes toggle is enabled", file=sys.stderr)
+            # Only attempt to get notes if we have binary name and function ID
+            if binary_name and function_id:
+                # No need to add notes again if already included
+                if request.context.get('notes') is None:
+                    try:
+                        note_content = get_note(binary_name, function_id)
+                        if note_content:
+                            request.context['notes'] = note_content
+                            print(f"[Chat API] Added notes for {binary_name}/{function_id}: {note_content[:50]}...", file=sys.stderr)
+                        else:
+                            print(f"[Chat API] No notes found for {binary_name}/{function_id}", file=sys.stderr)
+                    except Exception as e:
+                        print(f"[Chat API] Error getting notes: {str(e)}", file=sys.stderr)
+                else:
+                    print(f"[Chat API] Notes already included in context", file=sys.stderr)
+            else:
+                print(f"[Chat API] Missing binary name or function ID for notes", file=sys.stderr)
+        else:
+            print(f"[Chat API] Notes toggle is disabled", file=sys.stderr)
+        
+        # Always check for AI context tags (no toggle needed)
+        print(f"[Chat API] Checking for AI context tags", file=sys.stderr)
+        if binary_name and function_id:
+            try:
+                tags = get_tags(binary_name, function_id)
+                print(f"[Chat API] Found {len(tags)} tags for {binary_name}/{function_id}", file=sys.stderr)
+                # Only include tags marked for AI context
+                ai_context_tags = [tag for tag in tags if tag.get('includeInAI')]
+                if ai_context_tags:
+                    # Only include type and value fields
+                    request.context['tags'] = [{'type': tag['type'], 'value': tag['value']} for tag in ai_context_tags]
+                    print(f"[Chat API] Added {len(ai_context_tags)} AI context tags", file=sys.stderr)
+                else:
+                    print(f"[Chat API] No tags with includeInAI flag found", file=sys.stderr)
+            except Exception as e:
+                print(f"[Chat API] Error getting tags: {str(e)}", file=sys.stderr)
+        else:
+            print(f"[Chat API] Missing binary name or function ID for tags", file=sys.stderr)
         
         # Get active context toggles
+        active_context = []
         for key, value in request.context.items():
             if key.startswith('toggle_') and value:
                 active_context.append(key.replace('toggle_', ''))

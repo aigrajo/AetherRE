@@ -10,6 +10,7 @@ import openai
 from backend.config.settings import OPENAI_API_KEY, DEFAULT_MODEL, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE, SESSION_TIMEOUT_HOURS
 from backend.config.rate_limits import check_rate_limit
 from backend.utils.helpers import get_cache_key
+from backend.services.notes_service import get_note, get_tags
 
 # Set OpenAI API key
 openai.api_key = OPENAI_API_KEY
@@ -180,6 +181,20 @@ async def stream_chat_response(message: str, context: Dict[str, Any], session_id
         cfg_text += "\nEdges:\n"
         for edge in cfg['edges']:
             cfg_text += f"- {edge['source']} -> {edge['target']}\n"
+    
+    # Format notes if included in context
+    notes_text = ""
+    if context.get('notes'):
+        notes_text = "\nAnalyst Notes:\n" + context['notes']
+    
+    # Format tags if included in context
+    tags_text = ""
+    if context.get('tags') and len(context['tags']) > 0:
+        tags_text = "\nTags:\n"
+        for tag in context['tags']:
+            # Only use type and value fields
+            tag_info = f"- {tag['value']} (Type: {tag['type']})"
+            tags_text += tag_info + "\n"
 
     # Add current context
     context_prompt = f"""
@@ -194,6 +209,8 @@ Pseudocode Analysis:
 {xrefs_text}
 {strings_text}
 {cfg_text}
+{notes_text}
+{tags_text}
 """
     messages.append({"role": "system", "content": context_prompt})
 

@@ -5,10 +5,10 @@ import { initFileHandling, checkRecentAnalyses } from './fileHandler.js';
 import { setupFunctionFilter } from './functionManager.js';
 import { setupTabSwitching } from './tabManager.js';
 import { setupXRefFilters } from './xrefs.js';
-import {
-  initializeChatSession,
-  setupChatEventListeners,
-  setupContextToggles
+import { 
+  initializeChatSession, 
+  setupChatEventListeners, 
+  setupContextToggles 
 } from './chat.js';
 import { initTagNotePanel } from './TagNotePanel.js';
 import { PanelResizer } from '../resize.js';

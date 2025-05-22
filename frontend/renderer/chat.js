@@ -176,13 +176,65 @@ export async function sendMessage() {
       address: address
     };
 
+    // Store toggle states locally to determine what to include
+    const toggleStates = {};
+    const toggles = document.querySelectorAll('.toggle-label input[type="checkbox"]');
+    console.log('[Chat] Context toggles:', Array.from(toggles).map(t => `${t.id}: ${t.checked}`));
+    toggles.forEach(toggle => {
+      const name = toggle.id.replace('toggle-', '');
+      toggleStates[name] = toggle.checked;
+      // Don't add toggle states to context sent to AI
+    });
+
+    // Try to get binary name and function ID for notes and tags
+    let localFunctionId = null;
+    try {
+      const { getCurrentContext } = await import('./TagNotePanel.js');
+      const { binaryName, functionId } = getCurrentContext();
+      if (binaryName && functionId) {
+        console.log(`[Chat] Found binary and function ID: ${binaryName}/${functionId}`);
+        // Include binary name but not function ID in the context sent to AI
+        context.binaryName = binaryName;
+        // Store function ID locally for backend calls but don't include in context
+        localFunctionId = functionId;
+        
+        // Explicitly fetch tags with forAiContext flag
+        try {
+          const tagsResponse = await fetch(`http://localhost:8000/api/tags/${binaryName}/${functionId}`);
+          if (tagsResponse.ok) {
+            const tagsData = await tagsResponse.json();
+            console.log(`[Chat] Fetched ${tagsData.tags.length} tags for ${binaryName}/${functionId}`, tagsData.tags);
+            
+            // Filter for tags with includeInAI flag (matching what's in TagsPanel.js)
+            const aiContextTags = tagsData.tags.filter(tag => tag.includeInAI === true);
+            if (aiContextTags.length > 0) {
+              console.log(`[Chat] Found ${aiContextTags.length} tags with includeInAI=true`, aiContextTags);
+              // Only include type and value fields for tags
+              context.tags = aiContextTags.map(tag => ({
+                type: tag.type,
+                value: tag.value
+              }));
+            } else {
+              console.log('[Chat] No tags found with includeInAI=true');
+            }
+          } else {
+            console.error('[Chat] Failed to fetch tags:', tagsResponse.status);
+          }
+        } catch (tagError) {
+          console.error('[Chat] Error fetching tags:', tagError);
+        }
+      }
+    } catch (error) {
+      console.log('[Chat] Could not get binary/function context:', error);
+    }
+
     // Add pseudocode if enabled
-    if (document.getElementById('toggle-pseudocode').checked) {
+    if (toggleStates.pseudocode) {
       context.pseudocode = pseudocode;
     }
 
     // Add assembly if enabled
-    if (document.getElementById('toggle-assembly').checked) {
+    if (toggleStates.assembly) {
       const assemblyTable = document.querySelector('#assembly-table tbody');
       context.assembly = Array.from(assemblyTable.querySelectorAll('tr')).map(row => {
         const cells = row.querySelectorAll('td');
@@ -197,7 +249,7 @@ export async function sendMessage() {
     }
 
     // Add variables if enabled
-    if (document.getElementById('toggle-variables').checked) {
+    if (toggleStates.variables) {
       const variablesTable = document.querySelector('#variables-table tbody');
       context.variables = Array.from(variablesTable.querySelectorAll('tr')).map(row => {
         const cells = row.querySelectorAll('td');
@@ -211,7 +263,7 @@ export async function sendMessage() {
     }
 
     // Add xrefs if enabled
-    if (document.getElementById('toggle-xrefs').checked) {
+    if (toggleStates.xrefs) {
       const incomingXrefs = Array.from(document.querySelector('#incoming-xrefs-table tbody').querySelectorAll('tr')).map(row => {
         const cells = row.querySelectorAll('td');
         return {
@@ -239,7 +291,7 @@ export async function sendMessage() {
     }
 
     // Add strings if enabled
-    if (document.getElementById('toggle-strings').checked) {
+    if (toggleStates.strings) {
       const stringsTable = document.querySelector('#strings-table tbody');
       context.strings = Array.from(stringsTable.querySelectorAll('tr')).map(row => {
         const cells = row.querySelectorAll('td');
@@ -255,7 +307,7 @@ export async function sendMessage() {
     console.log('[Chat] Debug - functionName:', functionName);
     console.log('[Chat] Debug - global currentFunction:', state.currentFunction);
     console.log('[Chat] Debug - CFG available:', state.currentFunction && state.currentFunction.cfg ? 'Yes' : 'No');
-    if (document.getElementById('toggle-cfg').checked && state.currentFunction && state.currentFunction.cfg) {
+    if (toggleStates.cfg && state.currentFunction && state.currentFunction.cfg) {
       console.log('[Chat] Adding CFG data to context');
       context.cfg = {
         nodes: state.currentFunction.cfg.nodes.map(node => ({
@@ -267,10 +319,30 @@ export async function sendMessage() {
         edges: state.currentFunction.cfg.edges
       };
     } else {
-      console.log('[Chat] CFG toggle:', document.getElementById('toggle-cfg').checked);
+      console.log('[Chat] CFG toggle:', toggleStates.cfg);
       console.log('[Chat] global currentFunction exists:', !!state.currentFunction);
       console.log('[Chat] currentFunction.cfg exists:', !!(state.currentFunction && state.currentFunction.cfg));
     }
+    
+    // Add notes if enabled
+    if (toggleStates.notes && localFunctionId) {
+      try {
+        const { binaryName } = context;
+        if (binaryName && localFunctionId) {
+          // Fetch the note from the backend
+          const response = await fetch(`http://localhost:8000/api/notes/${binaryName}/${localFunctionId}`);
+          if (response.ok) {
+            const data = await response.json();
+            context.notes = data.content || '';
+            console.log('[Chat] Added notes to context');
+          }
+        }
+      } catch (error) {
+        console.error('[Chat] Error fetching notes for context:', error);
+      }
+    }
+
+    // AI Context tags were fetched earlier
 
     // Create a temporary message div for the generating state
     const chatMessages = document.getElementById('chat-messages');
