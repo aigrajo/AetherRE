@@ -144,30 +144,68 @@
   display: none;
 }
 
-.tag-item {
+.tag-list {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tag-item {
+  display: inline-flex;
   align-items: center;
-  margin-bottom: 8px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+  color: rgba(255, 255, 255, 0.9);
+  max-width: 200px;
+  position: relative;
+  background-color: #2a2a2a;
+  border: 2px solid;
+}
+
+.tag-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.tag-item:hover::before {
+  opacity: 1;
+}
+
+.tag-item.active {
+  background-color: currentColor;
+}
+
+.tag-item.active .tag-name {
+  color: #fff;
 }
 
 .tag-name {
-  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: currentColor;
+  z-index: 1;
+}
+
+.no-tags-message {
   font-size: 13px;
-}
-
-.tag-ai-toggle {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.tag-ai-toggle input {
-  margin: 0;
-}
-
-.tag-ai-toggle-label {
-  font-size: 12px;
   color: var(--text-secondary);
+  opacity: 0.7;
+  font-style: italic;
+  margin-bottom: 16px;
 }
 
 .new-tag-form {
@@ -182,9 +220,16 @@
   font-weight: 500;
 }
 
+.new-tag-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .new-tag-input-group {
   display: flex;
   gap: 8px;
+  flex: 1;
 }
 
 .new-tag-input {
@@ -207,8 +252,59 @@
   color: var(--text-primary);
 }
 
+.tag-color-selector {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.color-preview {
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+}
+
+.color-options {
+  position: absolute;
+  top: 35px;
+  left: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  background-color: var(--bg-secondary);
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  z-index: 10;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-5px);
+  transition: all 0.2s ease;
+}
+
+.color-options.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.color-option {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.color-option:hover {
+  transform: scale(1.1);
+}
+
 .new-tag-submit {
-  padding: 6px 12px;
+  padding: 6px 16px;
   background-color: var(--accent-color);
   color: var(--text-on-accent);
   border: none;

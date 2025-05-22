@@ -18,6 +18,19 @@ const TAG_TYPES = {
   }
 };
 
+// Predefined tag colors
+const TAG_COLORS = [
+  "#20D709", // Green
+  "#0000FF", // Blue
+  "#E91E63", // Pink
+  "#FF4500", // Orange
+  "#9C27B0", // Purple
+  "#FFD500", // Yellow
+  "#FF0000 ", // Red
+  "#009688", // Teal
+  "#8BC34A"  // Lime
+];
+
 // Current tags state
 let currentTags = [];
 
@@ -47,11 +60,21 @@ function setupTagsPanel() {
     
     <div class="new-tag-form">
       <div class="new-tag-heading">Add New Tag</div>
-      <div class="new-tag-input-group">
-        <input type="text" class="new-tag-input" id="new-tag-input" placeholder="Enter tag value...">
-        <select class="new-tag-type" id="new-tag-type">
-          ${Object.keys(TAG_TYPES).map(type => `<option value="${type}">${type}</option>`).join('')}
-        </select>
+      <div class="new-tag-inputs">
+        <div class="new-tag-input-group">
+          <input type="text" class="new-tag-input" id="new-tag-input" placeholder="Enter tag value...">
+          <select class="new-tag-type" id="new-tag-type">
+            ${Object.keys(TAG_TYPES).map(type => `<option value="${type}">${type}</option>`).join('')}
+          </select>
+        </div>
+        <div class="tag-color-selector">
+          <div class="color-preview" id="color-preview"></div>
+          <div class="color-options" id="color-options">
+            ${TAG_COLORS.map(color => 
+              `<div class="color-option" style="background-color: ${color}" data-color="${color}"></div>`
+            ).join('')}
+          </div>
+        </div>
         <button class="new-tag-submit" id="new-tag-submit">Add</button>
       </div>
     </div>
@@ -67,6 +90,9 @@ function setupTagsPanel() {
   
   // Setup new tag functionality
   setupNewTagForm();
+  
+  // Setup color picker
+  setupColorPicker();
 }
 
 /**
@@ -117,14 +143,44 @@ function setupTagTooltips() {
 }
 
 /**
+ * Setup color picker functionality
+ */
+function setupColorPicker() {
+  const colorPreview = document.getElementById('color-preview');
+  const colorOptions = document.getElementById('color-options');
+  const colorSelectors = document.querySelectorAll('.color-option');
+  
+  if (!colorPreview || !colorOptions) return;
+  
+  // Set default color
+  let selectedColor = TAG_COLORS[0];
+  colorPreview.style.backgroundColor = selectedColor;
+  
+  // Show/hide color options when preview is clicked
+  colorPreview.addEventListener('click', () => {
+    colorOptions.classList.toggle('visible');
+  });
+  
+  // Select color when clicked
+  colorSelectors.forEach(selector => {
+    selector.addEventListener('click', () => {
+      selectedColor = selector.getAttribute('data-color');
+      colorPreview.style.backgroundColor = selectedColor;
+      colorOptions.classList.remove('visible');
+    });
+  });
+}
+
+/**
  * Setup new tag form functionality
  */
 function setupNewTagForm() {
   const addButton = document.getElementById('new-tag-submit');
   const tagInput = document.getElementById('new-tag-input');
   const tagType = document.getElementById('new-tag-type');
+  const colorPreview = document.getElementById('color-preview');
   
-  if (!addButton || !tagInput || !tagType) return;
+  if (!addButton || !tagInput || !tagType || !colorPreview) return;
   
   addButton.addEventListener('click', () => {
     addNewTag();
@@ -143,11 +199,13 @@ function setupNewTagForm() {
 function addNewTag() {
   const tagInput = document.getElementById('new-tag-input');
   const tagType = document.getElementById('new-tag-type');
+  const colorPreview = document.getElementById('color-preview');
   
-  if (!tagInput || !tagType) return;
+  if (!tagInput || !tagType || !colorPreview) return;
   
   const tagValue = tagInput.value.trim();
   const tagTypeName = tagType.value;
+  const tagColor = colorPreview.style.backgroundColor || TAG_COLORS[0];
   
   if (!tagValue) return;
   
@@ -155,6 +213,7 @@ function addNewTag() {
   const newTag = {
     type: tagTypeName,
     value: tagValue,
+    color: tagColor,
     includeInAI: true
   };
   
@@ -186,6 +245,17 @@ function setupEventListeners() {
   
   // Listen for clear tags event
   document.addEventListener('clear-tags', handleClearTags);
+  
+  // Setup document click listener to close color picker when clicking outside
+  document.addEventListener('click', (e) => {
+    const colorOptions = document.getElementById('color-options');
+    const colorPreview = document.getElementById('color-preview');
+    
+    if (colorOptions && colorOptions.classList.contains('visible') && 
+        !e.target.closest('.color-options') && e.target !== colorPreview) {
+      colorOptions.classList.remove('visible');
+    }
+  });
 }
 
 /**
@@ -207,6 +277,13 @@ async function handleLoadTags(event) {
     
     // Update state
     currentTags = data.tags || [];
+    
+    // Ensure all tags have colors
+    currentTags.forEach(tag => {
+      if (!tag.color) {
+        tag.color = TAG_COLORS[Math.floor(Math.random() * TAG_COLORS.length)];
+      }
+    });
     
     // Render tags
     renderTags();
@@ -253,16 +330,16 @@ function renderTags() {
     if (tagsByType[type].length === 0) {
       tagsHTML = '<div class="no-tags-message">No tags of this type</div>';
     } else {
-      tagsHTML = tagsByType[type].map(tag => `
-        <div class="tag-item" data-type="${tag.type}" data-value="${tag.value}">
+      tagsHTML = `<div class="tag-list">` + 
+      tagsByType[type].map(tag => `
+        <div class="tag-item ${tag.includeInAI ? 'active' : ''}" 
+             data-type="${tag.type}" 
+             data-value="${tag.value}"
+             style="color: ${tag.color}; border-color: ${tag.color};">
           <div class="tag-name">${tag.value}</div>
-          <div class="tag-ai-toggle">
-            <input type="checkbox" class="tag-ai-checkbox" ${tag.includeInAI ? 'checked' : ''}>
-            <span class="tag-ai-toggle-label">AI</span>
-            <button class="tag-delete" title="Delete tag">×</button>
-          </div>
         </div>
-      `).join('');
+      `).join('') + 
+      `</div>`;
     }
     
     contentElement.innerHTML = tagsHTML;
@@ -276,24 +353,23 @@ function renderTags() {
  * Setup event listeners for the rendered tags
  */
 function setupTagEventListeners() {
-  // AI toggle checkboxes
-  document.querySelectorAll('.tag-ai-checkbox').forEach(checkbox => {
-    checkbox.addEventListener('change', handleTagAIToggle);
-  });
-  
-  // Delete tag buttons
-  document.querySelectorAll('.tag-delete').forEach(button => {
-    button.addEventListener('click', handleTagDelete);
+  // Left click to toggle AI inclusion
+  document.querySelectorAll('.tag-item').forEach(tagItem => {
+    // Left click - toggle AI inclusion
+    tagItem.addEventListener('click', handleTagClick);
+    
+    // Right click - delete tag
+    tagItem.addEventListener('contextmenu', handleTagRightClick);
   });
 }
 
 /**
- * Handle toggling the AI inclusion for a tag
- * @param {Event} event - The change event
+ * Handle left-clicking on a tag (toggle AI inclusion)
+ * @param {Event} event - The click event
  */
-function handleTagAIToggle(event) {
-  const checkbox = event.target;
-  const tagItem = checkbox.closest('.tag-item');
+function handleTagClick(event) {
+  event.preventDefault();
+  const tagItem = event.currentTarget;
   
   if (!tagItem) return;
   
@@ -306,7 +382,11 @@ function handleTagAIToggle(event) {
   );
   
   if (tagIndex !== -1) {
-    currentTags[tagIndex].includeInAI = checkbox.checked;
+    // Toggle includeInAI
+    currentTags[tagIndex].includeInAI = !currentTags[tagIndex].includeInAI;
+    
+    // Toggle active class
+    tagItem.classList.toggle('active', currentTags[tagIndex].includeInAI);
     
     // Save updated tags
     saveCurrentTags();
@@ -314,28 +394,31 @@ function handleTagAIToggle(event) {
 }
 
 /**
- * Handle deleting a tag
+ * Handle right-clicking on a tag (delete tag)
  * @param {Event} event - The click event
  */
-function handleTagDelete(event) {
-  const button = event.target;
-  const tagItem = button.closest('.tag-item');
+function handleTagRightClick(event) {
+  event.preventDefault();
+  const tagItem = event.currentTarget;
   
   if (!tagItem) return;
   
   const type = tagItem.getAttribute('data-type');
   const value = tagItem.getAttribute('data-value');
   
-  // Remove tag from current tags
-  currentTags = currentTags.filter(tag => 
-    !(tag.type === type && tag.value === value)
-  );
-  
-  // Update UI
-  renderTags();
-  
-  // Save updated tags
-  saveCurrentTags();
+  // Confirm deletion
+  if (confirm(`Delete tag '${value}'?`)) {
+    // Remove tag from current tags
+    currentTags = currentTags.filter(tag => 
+      !(tag.type === type && tag.value === value)
+    );
+    
+    // Update UI
+    renderTags();
+    
+    // Save updated tags
+    saveCurrentTags();
+  }
 }
 
 /**
