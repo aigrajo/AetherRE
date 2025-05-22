@@ -1,6 +1,7 @@
 import { state } from './core.js';
 import { switchTab } from './tabManager.js';
 import { updateAssemblyTab, updateXRefsTab, updateVariablesTab, updateStringsTab, updateCFGTab } from './tabManager.js';
+import { makeFunctionNameEditable } from './functionRenamer.js';
 
 // Render the function list
 export function renderFunctionList(functions) {
@@ -62,8 +63,10 @@ export function displayFunctionInfo(func) {
   
   // Update function name and address
   const functionNameEl = document.getElementById('function-name');
-  const functionAddressEl = document.getElementById('function-address');
   functionNameEl.textContent = func.name;
+  makeFunctionNameEditable(functionNameEl, func.name);
+  
+  const functionAddressEl = document.getElementById('function-address');
   functionAddressEl.textContent = func.address;
   
   // Update pseudocode

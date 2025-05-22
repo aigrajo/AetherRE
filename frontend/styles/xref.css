@@ -208,7 +208,8 @@
   text-decoration: none;
 }
 
-.variable-rename-input {
+.variable-rename-input,
+.function-rename-input {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
@@ -219,8 +220,20 @@
   box-sizing: border-box;
 }
 
-.variable-rename-input:focus {
+.variable-rename-input:focus,
+.function-rename-input:focus {
   outline: none;
   border-color: var(--accent-color);
   box-shadow: 0 0 8px rgba(255, 255, 255, 0.1);
+}
+
+/* Function name styles */
+#function-name.editable {
+  position: relative;
+  display: inline-block;
+}
+
+#function-name.editable:hover {
+  color: #FFFFFF;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
 } 
