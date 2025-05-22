@@ -4,8 +4,6 @@ A modern reverse engineering plugin built on Ghidra with an Electron GUI and AI-
 
 ---
 
-## Quick Start
-
 ### Prerequisites
 
 The setup script will automatically check for and verify these requirements:
@@ -13,7 +11,7 @@ The setup script will automatically check for and verify these requirements:
 - [Node.js](https://nodejs.org/) (v16+ for the Electron GUI)
 - [Java 11+](https://adoptium.net/) (for Ghidra)
 - [Python 3.8+](https://www.python.org/) (for backend scripts)
-- Windows 10/11 (Linux support coming soon)
+- Windows 10/11 (Linux support eventually)
 
 ### Setup
 
