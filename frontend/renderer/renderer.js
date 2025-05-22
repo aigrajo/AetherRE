@@ -5,11 +5,12 @@ import { initFileHandling, checkRecentAnalyses } from './fileHandler.js';
 import { setupFunctionFilter } from './functionManager.js';
 import { setupTabSwitching } from './tabManager.js';
 import { setupXRefFilters } from './xrefs.js';
-import { 
-  initializeChatSession, 
-  setupChatEventListeners, 
-  setupContextToggles 
+import {
+  initializeChatSession,
+  setupChatEventListeners,
+  setupContextToggles
 } from './chat.js';
+import { initTagNotePanel } from './TagNotePanel.js';
 import { PanelResizer } from '../resize.js';
 
 // Initialize core module immediately to make state available
@@ -56,6 +57,10 @@ async function initApp() {
   // Setup context toggles
   console.log('Setting up context toggles...');
   setupContextToggles();
+
+  // Initialize TagNote panel
+  console.log('Initializing TagNote panel...');
+  initTagNotePanel();
 
   // Initialize panel resizer
   console.log('Initializing panel resizer...');

@@ -14,6 +14,7 @@ from backend.config.settings import API_HOST, API_PORT, CORS_MIDDLEWARE_SETTINGS
 
 # Import API routes
 from backend.api.routes.chat import router as chat_router
+from backend.api.routes.notes import router as notes_router
 
 # Import utilities
 from backend.utils.helpers import analyze_xrefs
@@ -30,6 +31,7 @@ app.add_middleware(
 
 # Register routers
 app.include_router(chat_router)
+app.include_router(notes_router, prefix="/api")
 
 # Command-line mode functions
 def analyze_binary(binary_path: str):

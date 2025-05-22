@@ -53,6 +53,14 @@ export function initFileHandling() {
           state.currentFilePath = result.path;
           updateUIWithFile(state.originalBinaryName);
           renderFunctionList(state.functionsData.functions);
+          
+          // Dispatch binary loaded event for TagNote panel
+          console.log(`Binary loaded: ${state.originalBinaryName}`);
+          window.dispatchEvent(new CustomEvent('binary-loaded', {
+            detail: {
+              binaryName: state.originalBinaryName
+            }
+          }));
         }
       } else {
         // For JSON files, try to extract original binary name from the data
@@ -69,6 +77,13 @@ export function initFileHandling() {
           
           updateUIWithFile(state.originalBinaryName);
           renderFunctionList(state.functionsData.functions);
+          
+          // Dispatch binary loaded event for TagNote panel
+          window.dispatchEvent(new CustomEvent('binary-loaded', {
+            detail: {
+              binaryName: state.originalBinaryName
+            }
+          }));
         }
       }
     } catch (error) {

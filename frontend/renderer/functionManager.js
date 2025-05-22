@@ -81,6 +81,15 @@ export function displayFunctionInfo(func) {
   updateVariablesTab(func);
   updateStringsTab(func);
   updateCFGTab(func);
+  
+  // Dispatch event for TagNote panel
+  console.log(`Dispatching function-selected event for ${func.name} (${func.address})`);
+  window.dispatchEvent(new CustomEvent('function-selected', {
+    detail: {
+      functionId: func.address,
+      functionName: func.name
+    }
+  }));
 }
 
 // Setup function filter event listener

@@ -1,0 +1,235 @@
+/* TagNote Panel Styles */
+.tagnote-panel {
+  display: flex;
+  flex-direction: column;
+  height: 250px;
+  min-height: 120px;
+  width: 100%;
+  border-top: 1px solid var(--border-color);
+  position: relative;
+  background-color: var(--bg-secondary);
+}
+
+.tagnote-header {
+  padding: 8px 16px;
+  background-color: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tagnote-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.tagnote-tab {
+  padding: 4px 12px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  border-radius: 4px;
+}
+
+.tagnote-tab.active {
+  background-color: var(--accent-color);
+  color: var(--text-on-accent);
+}
+
+.tagnote-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.tagnote-content {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.tagnote-content-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: auto;
+}
+
+.tagnote-tab-pane {
+  display: none;
+  height: 100%;
+}
+
+.tagnote-tab-pane.active {
+  display: block;
+}
+
+/* Note Editor Styles */
+.note-editor {
+  height: 100%;
+  font-family: 'Fira Code', monospace;
+  font-size: 14px;
+}
+
+.note-editor .cm-editor {
+  height: 100%;
+  outline: none;
+}
+
+.note-editor .cm-content {
+  min-height: 100%;
+}
+
+.note-status {
+  position: absolute;
+  bottom: 4px;
+  right: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  opacity: 0.7;
+  padding: 4px 8px;
+  background-color: var(--bg-secondary);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* Tags Panel Styles */
+.tags-panel {
+  padding: 12px;
+  height: 100%;
+  overflow: auto;
+}
+
+.tags-group {
+  margin-bottom: 16px;
+}
+
+.tags-group-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tags-group-name {
+  font-weight: 500;
+  font-size: 14px;
+  margin-left: 4px;
+}
+
+.tags-group-toggle {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+}
+
+.tags-group.collapsed .tags-group-toggle {
+  transform: rotate(-90deg);
+}
+
+.tags-group-content {
+  padding-left: 20px;
+  margin-top: 8px;
+}
+
+.tags-group.collapsed .tags-group-content {
+  display: none;
+}
+
+.tag-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.tag-name {
+  flex: 1;
+  font-size: 13px;
+}
+
+.tag-ai-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tag-ai-toggle input {
+  margin: 0;
+}
+
+.tag-ai-toggle-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.new-tag-form {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.new-tag-heading {
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.new-tag-input-group {
+  display: flex;
+  gap: 8px;
+}
+
+.new-tag-input {
+  flex: 1;
+  padding: 6px 12px;
+  font-size: 13px;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+}
+
+.new-tag-type {
+  width: 120px;
+  padding: 6px 12px;
+  font-size: 13px;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+}
+
+.new-tag-submit {
+  padding: 6px 12px;
+  background-color: var(--accent-color);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+/* Resizer */
+.tagnote-resizer {
+  height: 6px;
+  width: 100%;
+  background-color: var(--bg-tertiary);
+  cursor: ns-resize;
+  position: absolute;
+  top: -3px;
+  left: 0;
+  z-index: 10;
+}
+
+.tagnote-resizer:hover,
+.tagnote-resizer.resizing {
+  background-color: var(--accent-color);
+} 
