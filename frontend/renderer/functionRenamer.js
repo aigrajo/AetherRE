@@ -76,35 +76,15 @@ export function renameFunction(oldName, newName) {
     return false;
   }
   
-  // Check if the new name exists anywhere in the pseudocode EXCEPT in the declaration
+  // Check if the new name exists anywhere in the pseudocode
   if (state.currentFunction && state.currentFunction.pseudocode) {
     const pseudocode = state.currentFunction.pseudocode;
     
-    // Modified check to avoid false positives on the function we're renaming:
-    // 1. Don't consider exact matches to the function declaration pattern
-    const declarationPattern = new RegExp(`(void|int|char|long|float|double)\\s+${oldName}\\s*\\(`);
-    
     // Do a simple check for the existence of the new name in pseudocode
     if (pseudocode.indexOf(newName) >= 0) {
-      // Now check if the matches are ONLY in the function declaration
-      // If so, that's okay because we'll be replacing those
-      const hasFunctionDeclaration = declarationPattern.test(pseudocode);
-      
-      // Only count as conflict if the name exists outside the function declaration
-      const firstIndex = pseudocode.indexOf(newName);
-      const declarationIndex = pseudocode.search(declarationPattern);
-      const endsWithinDeclaration = declarationIndex >= 0 && 
-                                   firstIndex >= declarationIndex && 
-                                   firstIndex < declarationIndex + oldName.length + 20; // Rough estimate of declaration length
-      
-      if (!endsWithinDeclaration) {
-        console.error(`Cannot rename to "${newName}" - this name exists as part of other identifiers in the pseudocode`);
-        console.debug(`Found "${newName}" at position ${firstIndex}, declaration is at ${declarationIndex}`);
-        window.showErrorModal(`Cannot rename to "${newName}" - this name exists as part of other identifiers in the pseudocode and would cause conflicts.`);
-        return false;
-      } else {
-        console.log(`Found "${newName}" but only in function declaration, allowing rename`);
-      }
+      console.error(`Cannot rename to "${newName}" - this name exists as part of other identifiers in the pseudocode`);
+      window.showErrorModal(`Cannot rename to "${newName}" - this name exists as part of other identifiers in the pseudocode and would cause conflicts.`);
+      return false;
     }
     
     // Expanded list of C language keywords - case insensitive check
