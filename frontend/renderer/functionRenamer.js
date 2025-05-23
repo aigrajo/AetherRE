@@ -62,11 +62,11 @@ export async function renameFunction(oldName, newName) {
   
   console.log(`Attempting to rename function from "${oldName}" to "${newName}"`);
   
-  // Use backend validation instead of frontend validation
+  // Use enhanced backend validation
   return await validateAndRenameFunction(oldName, newName);
 }
 
-// New function to validate and rename using backend service
+// Enhanced function to validate and rename using backend service
 async function validateAndRenameFunction(oldName, newName) {
   try {
     // Ensure we have valid current function data
@@ -84,7 +84,7 @@ async function validateAndRenameFunction(oldName, newName) {
     console.log(`Functions data available:`, !!state.functionsData);
     console.log(`Functions data keys:`, state.functionsData ? Object.keys(state.functionsData) : 'None');
     
-    // Call backend validation service using our API service
+    // Call enhanced backend validation service
     const validationResult = await apiService.validateFunctionName(
       oldName,
       newName,
@@ -98,6 +98,8 @@ async function validateAndRenameFunction(oldName, newName) {
       window.showErrorModal(validationResult.error_message);
       return false;
     }
+    
+    console.log('Backend validation passed, performing rename...');
     
     // Validation passed, perform the rename
     return performFunctionRename(oldName, newName);
@@ -131,8 +133,17 @@ function performFunctionRename(oldName, newName) {
   if (state.functionsData && state.functionsData.functions) {
     const func = state.functionsData.functions.find(f => f.name === oldName);
     if (func) {
+      // Set originalName for tracking if not already set
+      if (!func.originalName) {
+        func.originalName = oldName;
+      }
       func.name = newName;
     }
+  }
+  
+  // Also ensure current function has originalName tracking
+  if (!state.currentFunction.originalName) {
+    state.currentFunction.originalName = oldName;
   }
   
   // Update in pseudocode - CRITICAL PATH
@@ -198,26 +209,22 @@ function performFunctionRename(oldName, newName) {
         // 1. Restore the old function name
         state.currentFunction.name = oldState.name;
         
-        // 2. Restore functions data if available
-        if (oldState.functionsData && state.functionsData) {
-          // Find and update the function in the functions list
-          const func = state.functionsData.functions.find(f => f.name === newState.name);
-          if (func) {
-            func.name = oldState.name;
-          }
+        // 2. Restore functions data
+        if (oldState.functionsData) {
+          state.functionsData = JSON.parse(JSON.stringify(oldState.functionsData));
         }
         
-        // 3. Restore pseudocode
+        // 3. Restore pseudocode - IMPORTANT: use the stored pseudocode
         state.currentFunction.pseudocode = oldState.pseudocode;
         
-        // 4. Update Monaco editor immediately
+        // 4. Update Monaco editor immediately with the old pseudocode
         if (window.updateMonacoEditorContent) {
           window.updateMonacoEditorContent(oldState.pseudocode);
         } else {
           updateMonacoEditorContent(oldState.pseudocode);
         }
         
-        // 5. Update function name element if it exists
+        // 5. Update function name display
         const functionNameEl = document.getElementById('function-name');
         if (functionNameEl) {
           functionNameEl.textContent = oldState.name;
@@ -234,26 +241,22 @@ function performFunctionRename(oldName, newName) {
         // 1. Apply the new function name
         state.currentFunction.name = newState.name;
         
-        // 2. Restore functions data if available
-        if (newState.functionsData && state.functionsData) {
-          // Find and update the function in the functions list
-          const func = state.functionsData.functions.find(f => f.name === oldState.name);
-          if (func) {
-            func.name = newState.name;
-          }
+        // 2. Restore functions data with new name
+        if (newState.functionsData) {
+          state.functionsData = JSON.parse(JSON.stringify(newState.functionsData));
         }
         
-        // 3. Restore pseudocode
+        // 3. Apply new pseudocode
         state.currentFunction.pseudocode = newState.pseudocode;
         
-        // 4. Update Monaco editor immediately
+        // 4. Update Monaco editor
         if (window.updateMonacoEditorContent) {
           window.updateMonacoEditorContent(newState.pseudocode);
         } else {
           updateMonacoEditorContent(newState.pseudocode);
         }
         
-        // 5. Update function name element if it exists
+        // 5. Update function name display
         const functionNameEl = document.getElementById('function-name');
         if (functionNameEl) {
           functionNameEl.textContent = newState.name;
@@ -263,6 +266,7 @@ function performFunctionRename(oldName, newName) {
     }
   });
   
+  console.log(`Function rename completed successfully: "${oldName}" -> "${newName}"`);
   return true;
 }
 

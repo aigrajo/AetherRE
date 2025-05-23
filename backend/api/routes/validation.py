@@ -34,9 +34,21 @@ class TagValidationRequest(BaseModel):
     tag_type: str
     existing_tags: List[Dict[str, Any]]
 
+class BatchFunctionValidationRequest(BaseModel):
+    rename_operations: List[Dict[str, Any]]  # Each with old_name, new_name, function_id, pseudocode
+    functions_data: Dict[str, Any]
+
+class BatchVariableValidationRequest(BaseModel):
+    rename_operations: List[Dict[str, Any]]  # Each with old_name, new_name, pseudocode
+    local_variables: List[Dict[str, Any]]
+
 class ValidationResponse(BaseModel):
     is_valid: bool
     error_message: Optional[str] = None
+
+class BatchValidationResponse(BaseModel):
+    results: List[ValidationResponse]
+    overall_valid: bool
 
 @router.post("/function-name", response_model=ValidationResponse)
 async def validate_function_name(request: FunctionValidationRequest):
@@ -115,4 +127,72 @@ async def validate_against_keywords(name: str = Body(..., embed=True)):
         return ValidationResponse(is_valid=is_valid, error_message=error)
         
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/pseudocode-conflicts", response_model=ValidationResponse)
+async def validate_pseudocode_conflicts(
+    name: str = Body(...),
+    pseudocode: Optional[str] = Body(None),
+    old_name: Optional[str] = Body(None)
+):
+    """Validate that a name doesn't conflict with pseudocode."""
+    try:
+        is_valid, error = ValidationService.validate_pseudocode_conflicts(name, pseudocode, old_name)
+        return ValidationResponse(is_valid=is_valid, error_message=error)
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/batch/function-names", response_model=BatchValidationResponse)
+async def batch_validate_function_names(request: BatchFunctionValidationRequest):
+    """Batch validate multiple function name changes."""
+    try:
+        logger.debug(f"Batch function validation request: {len(request.rename_operations)} operations")
+        
+        results = ValidationService.batch_validate_function_names(
+            request.rename_operations,
+            request.functions_data
+        )
+        
+        # Convert results to response format
+        validation_responses = [
+            ValidationResponse(is_valid=is_valid, error_message=error)
+            for is_valid, error in results
+        ]
+        
+        overall_valid = all(result.is_valid for result in validation_responses)
+        
+        logger.debug(f"Batch validation results: {len(validation_responses)} results, overall_valid={overall_valid}")
+        
+        return BatchValidationResponse(results=validation_responses, overall_valid=overall_valid)
+        
+    except Exception as e:
+        logger.error(f"Error in batch function validation: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/batch/variable-names", response_model=BatchValidationResponse)
+async def batch_validate_variable_names(request: BatchVariableValidationRequest):
+    """Batch validate multiple variable name changes."""
+    try:
+        logger.debug(f"Batch variable validation request: {len(request.rename_operations)} operations")
+        
+        results = ValidationService.batch_validate_variable_names(
+            request.rename_operations,
+            request.local_variables
+        )
+        
+        # Convert results to response format
+        validation_responses = [
+            ValidationResponse(is_valid=is_valid, error_message=error)
+            for is_valid, error in results
+        ]
+        
+        overall_valid = all(result.is_valid for result in validation_responses)
+        
+        logger.debug(f"Batch validation results: {len(validation_responses)} results, overall_valid={overall_valid}")
+        
+        return BatchValidationResponse(results=validation_responses, overall_valid=overall_valid)
+        
+    except Exception as e:
+        logger.error(f"Error in batch variable validation: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) 

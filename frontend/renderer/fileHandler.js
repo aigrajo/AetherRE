@@ -1,7 +1,7 @@
 import { state } from './core.js';
 import { updateUIWithFile } from './core.js';
 import { renderFunctionList } from './functionManager.js';
-import { saveProject, loadProject, getProjectInfo, collectProjectData, applyProjectData } from './projectManager.js';
+import { loadProject, getProjectInfo, collectProjectData, applyProjectData } from './projectManager.js';
 
 // Initialize file handling
 export function initFileHandling() {
@@ -136,7 +136,7 @@ async function handleSaveProject() {
     console.log('Project info:', projectInfo);
     console.log('Current project file:', state.currentProjectFile);
     
-    // Collect project data first
+    // Collect project data using the enhanced backend service
     console.log('Collecting project data...');
     const projectData = await collectProjectData();
     if (!projectData) {
@@ -158,13 +158,16 @@ async function handleSaveProject() {
     // If we have a current project file, save directly to it
     if (state.currentProjectFile) {
       console.log(`Saving to existing project file: ${state.currentProjectFile}`);
+      console.log('Checking if writeProjectFile API exists:', !!window.electronAPI.writeProjectFile);
       try {
         // Save directly to the existing file using Electron API
-        await window.electronAPI.writeProjectFile(state.currentProjectFile, projectData);
+        const result = await window.electronAPI.writeProjectFile(state.currentProjectFile, projectData);
+        console.log('writeProjectFile result:', result);
         success = true;
         console.log('Project saved to existing file successfully');
       } catch (error) {
         console.error('Failed to save to existing file:', error);
+        console.error('Error details:', error.message, error.stack);
         alert(`Failed to save project: ${error.message}`);
         return;
       }
@@ -216,6 +219,8 @@ async function handleSaveProjectAs() {
 
   try {
     console.log('Starting save project as process...');
+    
+    // Collect project data using the enhanced backend service
     console.log('Collecting project data...');
     const projectData = await collectProjectData();
     if (!projectData) {

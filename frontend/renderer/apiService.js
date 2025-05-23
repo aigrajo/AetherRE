@@ -37,7 +37,7 @@ export class ApiService {
         }
     }
 
-    // Validation API calls
+    // Enhanced validation API calls
     async validateFunctionName(oldName, newName, functionsData, currentFunctionId, pseudocode) {
         return this.request('/api/validation/function-name', {
             method: 'POST',
@@ -88,7 +88,39 @@ export class ApiService {
         });
     }
 
-    // Project API calls
+    async validatePseudocodeConflicts(name, pseudocode, oldName = null) {
+        return this.request('/api/validation/pseudocode-conflicts', {
+            method: 'POST',
+            body: JSON.stringify({
+                name: name,
+                pseudocode: pseudocode,
+                old_name: oldName
+            })
+        });
+    }
+
+    // Batch validation API calls
+    async batchValidateFunctionNames(renameOperations, functionsData) {
+        return this.request('/api/validation/batch/function-names', {
+            method: 'POST',
+            body: JSON.stringify({
+                rename_operations: renameOperations,
+                functions_data: functionsData
+            })
+        });
+    }
+
+    async batchValidateVariableNames(renameOperations, localVariables) {
+        return this.request('/api/validation/batch/variable-names', {
+            method: 'POST',
+            body: JSON.stringify({
+                rename_operations: renameOperations,
+                local_variables: localVariables
+            })
+        });
+    }
+
+    // Enhanced project API calls
     async collectProjectData(projectName, binaryName, binaryPath, functionsData) {
         return this.request('/api/projects/collect-data', {
             method: 'POST',
@@ -118,6 +150,36 @@ export class ApiService {
                 functions_data: functionsData,
                 function_names: functionNames,
                 variable_names: variableNames
+            })
+        });
+    }
+
+    async batchApplyCustomizations(functionsData, customizations) {
+        return this.request('/api/projects/batch-apply', {
+            method: 'POST',
+            body: JSON.stringify({
+                functions_data: functionsData,
+                customizations: customizations
+            })
+        });
+    }
+
+    async getCurrentProjectState(binaryName, functionsData) {
+        return this.request('/api/projects/state/current', {
+            method: 'POST',
+            body: JSON.stringify({
+                binary_name: binaryName,
+                functions_data: functionsData
+            })
+        });
+    }
+
+    async validateProjectState(binaryName, functionsData) {
+        return this.request('/api/projects/state/validate', {
+            method: 'POST',
+            body: JSON.stringify({
+                binary_name: binaryName,
+                functions_data: functionsData
             })
         });
     }
@@ -198,10 +260,6 @@ export class ApiService {
         return this.request(`/api/tags/${binary}/${functionId}/ai-context`);
     }
 
-    async getGroupedTags(binary, functionId) {
-        return this.request(`/api/tags/${binary}/${functionId}/grouped`);
-    }
-
     async getTagTypes() {
         return this.request('/api/tags/types');
     }
@@ -216,7 +274,7 @@ export class ApiService {
         });
     }
 
-    // Notes API calls (existing functionality)
+    // Notes API calls
     async getNote(binary, functionId) {
         return this.request(`/api/notes/${binary}/${functionId}`);
     }
@@ -228,7 +286,7 @@ export class ApiService {
         });
     }
 
-    // Chat API calls (existing functionality)
+    // Chat API calls
     async sendChatMessage(message, context = null) {
         return this.request('/api/chat/send', {
             method: 'POST',
@@ -240,5 +298,5 @@ export class ApiService {
     }
 }
 
-// Export a singleton instance
+// Create and export singleton instance
 export const apiService = new ApiService(); 

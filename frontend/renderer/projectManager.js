@@ -1,5 +1,6 @@
 // Project Manager - Handles saving and loading AetherRE project files
 import { state } from './core.js';
+import { apiService } from './apiService.js';
 
 // Project file format version
 const PROJECT_VERSION = "1.0";
@@ -13,9 +14,9 @@ async function calculateBinaryHash() {
   }
   
   try {
-    // Use the Electron API to calculate hash
-    const hash = await window.electronAPI.calculateFileHash(state.currentFilePath);
-    return hash;
+    // Use the backend API to calculate hash
+    const response = await apiService.calculateBinaryHash(state.currentFilePath);
+    return response.hash;
   } catch (error) {
     console.error('Error calculating binary hash:', error);
     throw new Error("Failed to calculate binary hash");
@@ -37,36 +38,23 @@ function getCurrentBinaryName() {
 /**
  * Clean binary name for filesystem compatibility
  */
-function cleanBinaryName(name) {
-  return name.replace(/[^\w\d]/g, '_');
+async function cleanBinaryName(name) {
+  const response = await apiService.cleanBinaryName(name);
+  return response.cleaned_name;
 }
 
 /**
  * Collect custom function names from current state
  */
-function collectCustomFunctionNames() {
-  const customNames = {};
-  
+async function collectCustomFunctionNames() {
   console.log('Collecting custom function names...');
   console.log('state.functionsData:', !!state.functionsData);
   console.log('state.functionsData?.functions length:', state.functionsData?.functions?.length || 0);
   
-  if (state.functionsData?.functions) {
-    state.functionsData.functions.forEach((func, index) => {
-      console.log(`Function ${index}: address=${func.address}, name="${func.name}"`);
-      
-      // Only save if name was customized (not default Ghidra name pattern)
-      if (func.name && !func.name.startsWith('FUN_') && !func.name.startsWith('SUB_')) {
-        customNames[func.address] = func.name;
-        console.log(`✓ Saving custom function name: ${func.address} -> "${func.name}"`);
-      } else {
-        console.log(`✗ Skipping default function name: ${func.address} -> "${func.name}"`);
-      }
-    });
-  } else {
-    console.warn('No functionsData available for collecting custom function names');
-  }
+  // Use backend service for collection
+  const response = await apiService.collectCustomFunctionNames(state.functionsData || {});
   
+  const customNames = response.function_names;
   console.log(`Collected ${Object.keys(customNames).length} custom function names:`, customNames);
   return customNames;
 }
@@ -74,58 +62,15 @@ function collectCustomFunctionNames() {
 /**
  * Collect custom variable names from all functions
  */
-function collectCustomVariableNames() {
-  const variableNames = {};
-  
+async function collectCustomVariableNames() {
   console.log('Collecting custom variable names...');
   console.log('state.functionsData:', !!state.functionsData);
   console.log('state.functionsData?.functions length:', state.functionsData?.functions?.length || 0);
   
-  if (state.functionsData?.functions) {
-    state.functionsData.functions.forEach((func, functionIndex) => {
-      console.log(`Checking function ${functionIndex}: address=${func.address}, variables=${func.local_variables?.length || 0}`);
-      
-      if (func.local_variables && Array.isArray(func.local_variables)) {
-        const functionVarNames = {};
-        
-        func.local_variables.forEach((variable, varIndex) => {
-          console.log(`  Variable ${varIndex}: name="${variable.name}", originalName="${variable.originalName || 'none'}"`);
-          
-          // Check if this variable has been renamed (has originalName property)
-          if (variable.originalName && variable.name !== variable.originalName) {
-            // Store mapping: original name -> custom name
-            functionVarNames[variable.originalName] = variable.name;
-            console.log(`    ✓ Saving custom variable mapping: "${variable.originalName}" -> "${variable.name}"`);
-          } else if (variable.name && 
-              !variable.name.startsWith('local_') && 
-              !variable.name.startsWith('param_') &&
-              !variable.name.startsWith('iVar') &&
-              !variable.name.startsWith('uVar') &&
-              variable.name !== 'unnamed') {
-            
-            // Variable was custom named from the start (no original name tracked)
-            // This shouldn't happen with proper tracking, but handle it as fallback
-            functionVarNames[variable.name] = variable.name;
-            console.log(`    ⚠ Saving variable without original name tracking: "${variable.name}"`);
-          } else {
-            console.log(`    ✗ Skipping default/unchanged variable name: "${variable.name}"`);
-          }
-        });
-        
-        if (Object.keys(functionVarNames).length > 0) {
-          variableNames[func.address] = functionVarNames;
-          console.log(`✓ Function ${func.address} has ${Object.keys(functionVarNames).length} custom variables`);
-        } else {
-          console.log(`✗ Function ${func.address} has no custom variables`);
-        }
-      } else {
-        console.log(`  Function ${func.address} has no local_variables array`);
-      }
-    });
-  } else {
-    console.warn('No functionsData available for collecting custom variable names');
-  }
+  // Use backend service for collection
+  const response = await apiService.collectCustomVariableNames(state.functionsData || {});
   
+  const variableNames = response.variable_names;
   console.log(`Collected variable names for ${Object.keys(variableNames).length} functions:`, variableNames);
   return variableNames;
 }
@@ -154,7 +99,7 @@ async function collectAllNotes() {
   
   // For other functions, we still need to query the backend since we don't have
   // a centralized frontend state for all notes
-  const binaryName = cleanBinaryName(getCurrentBinaryName());
+  const binaryName = await cleanBinaryName(getCurrentBinaryName());
   
   if (state.functionsData?.functions) {
     for (const func of state.functionsData.functions) {
@@ -198,25 +143,18 @@ async function collectAllTags() {
         tags[currentContext.functionId] = currentTags;
         console.log(`Collected ${currentTags.length} tags from frontend for function ${currentContext.functionId}`);
       }
-    } else {
-      console.log('No current context available for frontend tags collection');
     }
   } catch (error) {
     console.warn('Could not get current tags from TagsPanel:', error);
   }
   
-  // For other functions, we still need to query the backend since we don't have
-  // a centralized frontend state for all tags
-  const binaryName = cleanBinaryName(getCurrentBinaryName());
+  // For other functions, query the backend
+  const binaryName = await cleanBinaryName(getCurrentBinaryName());
   
   if (state.functionsData?.functions) {
-    console.log(`Checking ${state.functionsData.functions.length} functions for tags...`);
     for (const func of state.functionsData.functions) {
       // Skip if we already got tags for this function from the frontend
-      if (tags[func.address]) {
-        console.log(`Skipping function ${func.address} - already have tags from frontend`);
-        continue;
-      }
+      if (tags[func.address]) continue;
       
       try {
         const response = await fetch(`http://localhost:8000/api/tags/${binaryName}/${func.address}`);
@@ -224,7 +162,6 @@ async function collectAllTags() {
           const data = await response.json();
           if (data.tags && data.tags.length > 0) {
             tags[func.address] = data.tags;
-            console.log(`Collected ${data.tags.length} tags from backend for function ${func.address}`);
           }
         }
       } catch (error) {
@@ -233,35 +170,26 @@ async function collectAllTags() {
     }
   }
   
-  console.log(`Collected tags for ${Object.keys(tags).length} functions total`);
+  console.log(`Collected tags for ${Object.keys(tags).length} functions`);
   return tags;
 }
 
 /**
- * Collect chat sessions from the backend
+ * Collect chat sessions from backend
  */
 async function collectChatSessions() {
   try {
-    console.log('Collecting chat sessions from backend...');
     const response = await window.electronAPI.listChatSessions();
-    console.log('Chat sessions response:', response);
+    const sessions = response.sessions.map(session => ({
+      session_id: session.session_id,
+      name: session.name,
+      created_at: session.created_at,
+      last_activity: session.last_activity,
+      messages: session.messages
+    }));
     
-    if (response && response.sessions) {
-      const sessions = response.sessions.map(session => ({
-        session_id: session.session_id,
-        name: session.name,
-        created_at: session.created_at,
-        last_activity: session.last_activity,
-        message_count: session.message_count,
-        messages: session.messages || []
-      }));
-      
-      console.log(`Collected ${sessions.length} chat sessions`);
-      return sessions;
-    } else {
-      console.warn('No sessions found in response:', response);
-      return [];
-    }
+    console.log(`Collected ${sessions.length} chat sessions`);
+    return sessions;
   } catch (error) {
     console.warn('Failed to collect chat sessions:', error);
     return [];
@@ -269,40 +197,7 @@ async function collectChatSessions() {
 }
 
 /**
- * Save current project to file
- */
-export async function saveProject(projectName) {
-  try {
-    console.log(`Starting project save: ${projectName}`);
-    
-    // Validate we have a binary loaded
-    if (!state.originalBinaryName || !state.currentFilePath) {
-      throw new Error("No binary loaded. Please load a binary file first.");
-    }
-
-    // Collect project data
-    const projectData = await collectProjectData(projectName);
-    
-    // Save to file using Electron API
-    const success = await window.electronAPI.saveProject(projectData, `${projectName}.aetherre`);
-    
-    if (success) {
-      console.log("Project saved successfully");
-      showSuccessMessage(`Project "${projectName}" saved successfully!`);
-      return true;
-    } else {
-      throw new Error("Failed to save project file");
-    }
-    
-  } catch (error) {
-    console.error('Error saving project:', error);
-    showErrorMessage(`Failed to save project: ${error.message}`);
-    return false;
-  }
-}
-
-/**
- * Collect project data without saving
+ * Collect project data without saving - enhanced with backend integration
  */
 export async function collectProjectData(projectName = null) {
   // Validate we have a binary loaded
@@ -314,76 +209,25 @@ export async function collectProjectData(projectName = null) {
   console.log(`Binary: ${state.originalBinaryName}`);
   console.log(`File path: ${state.currentFilePath}`);
 
-  // Calculate binary hash for verification
-  console.log("Calculating binary hash...");
-  const binaryHash = await calculateBinaryHash();
-  console.log(`Binary hash: ${binaryHash}`);
+  // Use the enhanced backend service
+  const response = await apiService.collectProjectData(
+    projectName,
+    state.originalBinaryName,
+    state.currentFilePath,
+    state.functionsData || {}
+  );
   
-  const binaryName = getCurrentBinaryName();
-  console.log(`Clean binary name: ${binaryName}`);
-  
-  // Use provided name or generate default
-  const finalProjectName = projectName || state.originalBinaryName.replace(/\.[^/.]+$/, "");
-  console.log(`Project name: ${finalProjectName}`);
-  
-  // Collect all metadata
-  console.log("=== Collecting project metadata ===");
-  
-  console.log("1. Collecting custom function names...");
-  const customFunctionNames = collectCustomFunctionNames();
-  console.log(`   Result: ${Object.keys(customFunctionNames).length} custom function names`);
-  
-  console.log("2. Collecting custom variable names...");
-  const customVariableNames = collectCustomVariableNames();
-  console.log(`   Result: ${Object.keys(customVariableNames).length} functions with custom variables`);
-  
-  console.log("3. Collecting notes...");
-  const notes = await collectAllNotes();
-  console.log(`   Result: ${Object.keys(notes).length} functions with notes`);
-  
-  console.log("4. Collecting tags...");
-  const tags = await collectAllTags();
-  console.log(`   Result: ${Object.keys(tags).length} functions with tags`);
-  
-  console.log("5. Collecting chat sessions...");
-  const chatSessions = await collectChatSessions();
-  console.log(`   Result: ${chatSessions.length} chat sessions`);
-  
-  console.log("=== Building project data structure ===");
-  
-  // Build project data structure
-  const projectData = {
-    aetherre_project: {
-      version: PROJECT_VERSION,
-      name: finalProjectName,
-      created: new Date().toISOString(),
-      modified: new Date().toISOString()
-    },
-    target_binary: {
-      filename: state.originalBinaryName,
-      sha256: binaryHash,
-      analysis_started: new Date().toISOString()
-    },
-    customizations: {
-      function_names: customFunctionNames,
-      variable_names: customVariableNames,
-      notes: notes,
-      tags: tags
-    },
-    chat_history: {
-      sessions: chatSessions
-    }
-  };
-  
+  console.log("Project data collected via backend service");
   console.log("=== Project Data Collection Summary ===");
-  console.log(`Function names: ${Object.keys(customFunctionNames).length}`);
-  console.log(`Variable names: ${Object.keys(customVariableNames).length}`);
-  console.log(`Notes: ${Object.keys(notes).length}`);
-  console.log(`Tags: ${Object.keys(tags).length}`);
-  console.log(`Chat sessions: ${chatSessions.length}`);
+  const customizations = response.project_data.customizations;
+  console.log(`Function names: ${Object.keys(customizations.function_names || {}).length}`);
+  console.log(`Variable names: ${Object.keys(customizations.variable_names || {}).length}`);
+  console.log(`Notes: ${Object.keys(customizations.notes || {}).length}`);
+  console.log(`Tags: ${Object.keys(customizations.tags || {}).length}`);
+  console.log(`Chat sessions: ${(response.project_data.chat_history?.sessions || []).length}`);
   console.log("=== End Collection Summary ===");
   
-  return projectData;
+  return response.project_data;
 }
 
 /**
@@ -580,9 +424,58 @@ async function applyCustomFunctionNames(functionNames) {
   
   let appliedCount = 0;
   state.functionsData.functions.forEach(func => {
-    if (functionNames[func.address]) {
-      func.name = functionNames[func.address];
+    // Check if there's a custom name for this function's current name (original name)
+    if (functionNames[func.name]) {
+      const customName = functionNames[func.name];
+      const originalName = func.name;
+      
+      // Set the original name for tracking (if not already set)
+      if (!func.originalName) {
+        func.originalName = func.name;
+      }
+      
+      // Apply the custom name
+      func.name = customName;
       appliedCount++;
+      
+      // CRITICAL: Update pseudocode content to replace original name with custom name
+      if (func.pseudocode) {
+        try {
+          // Create a regex that matches the function name as a whole word
+          const regex = new RegExp(`\\b${originalName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g');
+          const updatedPseudocode = func.pseudocode.replace(regex, customName);
+          
+          if (updatedPseudocode !== func.pseudocode) {
+            func.pseudocode = updatedPseudocode;
+            console.log(`Updated pseudocode for function "${originalName}" -> "${customName}"`);
+            
+            // If this is the currently displayed function, update the Monaco editor
+            if (state.currentFunction && state.currentFunction.address === func.address) {
+              state.currentFunction.pseudocode = updatedPseudocode;
+              state.currentFunction.name = customName;
+              if (!state.currentFunction.originalName) {
+                state.currentFunction.originalName = originalName;
+              }
+              
+              // Update Monaco editor immediately
+              if (window.updateMonacoEditorContent) {
+                window.updateMonacoEditorContent(updatedPseudocode);
+              }
+              
+              // Update function name display
+              const functionNameEl = document.getElementById('function-name');
+              if (functionNameEl) {
+                functionNameEl.textContent = customName;
+                functionNameEl.setAttribute('data-function-name', customName);
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`Error updating pseudocode for function ${originalName}:`, error);
+        }
+      }
+      
+      console.log(`Applied function rename: "${func.originalName}" -> "${func.name}"`);
     }
   });
   
@@ -599,11 +492,14 @@ async function applyCustomVariableNames(variableNames) {
   state.functionsData.functions.forEach(func => {
     if (variableNames[func.address] && func.local_variables) {
       const funcVarNames = variableNames[func.address];
+      let functionPseudocodeUpdated = false;
+      let updatedPseudocode = func.pseudocode;
       
       func.local_variables.forEach(variable => {
         // Check if there's a custom name for this variable's current name (original name)
         if (funcVarNames[variable.name]) {
           const customName = funcVarNames[variable.name];
+          const originalName = variable.name;
           
           // Set the original name for tracking (if not already set)
           if (!variable.originalName) {
@@ -614,9 +510,41 @@ async function applyCustomVariableNames(variableNames) {
           variable.name = customName;
           appliedCount++;
           
+          // CRITICAL: Update pseudocode content to replace original variable name with custom name
+          if (updatedPseudocode) {
+            try {
+              // Create a regex that matches the variable name as a whole word
+              const regex = new RegExp(`\\b${originalName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g');
+              const newPseudocode = updatedPseudocode.replace(regex, customName);
+              
+              if (newPseudocode !== updatedPseudocode) {
+                updatedPseudocode = newPseudocode;
+                functionPseudocodeUpdated = true;
+                console.log(`Updated pseudocode for variable "${originalName}" -> "${customName}" in function ${func.address}`);
+              }
+            } catch (error) {
+              console.error(`Error updating pseudocode for variable ${originalName}:`, error);
+            }
+          }
+          
           console.log(`Applied variable rename: "${variable.originalName}" -> "${variable.name}"`);
         }
       });
+      
+      // If pseudocode was updated, apply it to the function
+      if (functionPseudocodeUpdated && updatedPseudocode !== func.pseudocode) {
+        func.pseudocode = updatedPseudocode;
+        
+        // If this is the currently displayed function, update the Monaco editor
+        if (state.currentFunction && state.currentFunction.address === func.address) {
+          state.currentFunction.pseudocode = updatedPseudocode;
+          
+          // Update Monaco editor immediately
+          if (window.updateMonacoEditorContent) {
+            window.updateMonacoEditorContent(updatedPseudocode);
+          }
+        }
+      }
     }
   });
   
@@ -627,7 +555,7 @@ async function applyCustomVariableNames(variableNames) {
  * Apply notes to functions
  */
 async function applyNotes(notes) {
-  const binaryName = cleanBinaryName(getCurrentBinaryName());
+  const binaryName = await cleanBinaryName(getCurrentBinaryName());
   let appliedCount = 0;
   
   for (const [functionAddress, noteContent] of Object.entries(notes)) {
@@ -669,7 +597,7 @@ async function applyNotes(notes) {
  * Apply tags to functions
  */
 async function applyTags(tags) {
-  const binaryName = cleanBinaryName(getCurrentBinaryName());
+  const binaryName = await cleanBinaryName(getCurrentBinaryName());
   let appliedCount = 0;
   
   for (const [functionAddress, functionTags] of Object.entries(tags)) {

@@ -8,11 +8,11 @@ export async function renameVariable(oldName, newName) {
   
   console.log(`Attempting to rename variable from "${oldName}" to "${newName}"`);
   
-  // Use backend validation instead of frontend validation
+  // Use enhanced backend validation
   return await validateAndRenameVariable(oldName, newName);
 }
 
-// New function to validate and rename using backend service
+// Enhanced function to validate and rename using backend service
 async function validateAndRenameVariable(oldName, newName) {
   try {
     // Ensure we have valid current function data
@@ -23,7 +23,7 @@ async function validateAndRenameVariable(oldName, newName) {
     console.log(`Current function for variable rename: ${state.currentFunction.name || 'unnamed'}`);
     console.log(`Local variables available:`, state.currentFunction.local_variables ? state.currentFunction.local_variables.length : 0);
     
-    // Call backend validation service using our API service
+    // Call enhanced backend validation service
     const validationResult = await apiService.validateVariableName(
       oldName,
       newName,
@@ -36,6 +36,8 @@ async function validateAndRenameVariable(oldName, newName) {
       window.showErrorModal(validationResult.error_message);
       return false;
     }
+    
+    console.log('Backend validation passed, performing rename...');
     
     // Validation passed, perform the rename
     return performVariableRename(oldName, newName);
@@ -199,12 +201,15 @@ function performVariableRename(oldName, newName) {
         if (state.currentFunction.local_variables) {
           state.currentFunction.local_variables.forEach(variable => {
             if (variable.name === oldState.name) {
+              if (!variable.originalName) {
+                variable.originalName = oldState.name;
+              }
               variable.name = newState.name;
             }
           });
         }
         
-        // 2. Restore pseudocode
+        // 2. Apply new pseudocode
         state.currentFunction.pseudocode = newState.pseudocode;
         
         // 3. Update Monaco editor
@@ -250,6 +255,7 @@ function performVariableRename(oldName, newName) {
     }
   });
   
+  console.log(`Variable rename completed successfully: "${oldName}" -> "${newName}"`);
   return true;
 }
 
