@@ -360,7 +360,7 @@ export async function sendMessage() {
         tempMessageDiv.className = 'message assistant';
         tempMessageDiv.textContent = '';
       }
-      assistantReply += event.detail;
+      assistantReply += event.detail.content || event.detail; // Handle both object and string formats
       if (window.marked && window.DOMPurify) {
         const rawHtml = window.marked.parse(assistantReply);
         const cleanHtml = window.DOMPurify.sanitize(rawHtml);
@@ -388,8 +388,28 @@ export async function sendMessage() {
     // Remove the chunk handler
     window.removeEventListener('chat-chunk', chunkHandler);
 
-    if (!response || !response.reply) {
-      throw new Error('Invalid response format from backend');
+    console.log('[Chat] Received response from backend:', response);
+    console.log('[Chat] Response type:', typeof response);
+    console.log('[Chat] Response has reply:', !!response?.reply);
+    console.log('[Chat] Response keys:', response ? Object.keys(response) : 'null');
+
+    if (!response) {
+      console.error('[Chat] No response received from backend');
+      throw new Error('No response received from backend');
+    }
+
+    if (!response.hasOwnProperty('reply')) {
+      console.error('[Chat] Response missing reply field - response:', response);
+      throw new Error('Backend response missing reply field');
+    }
+
+    if (response.reply === '' || response.reply == null) {
+      console.error('[Chat] Backend returned empty reply - this usually means:');
+      console.error('[Chat] 1. OpenAI API key is not configured');
+      console.error('[Chat] 2. There was an error during the API call');
+      console.error('[Chat] 3. The backend service encountered an error');
+      addMessage('⚠️ The AI assistant returned an empty response. This usually means the OpenAI API key is not configured or there was an error during the API call. Please check the backend logs.', false);
+      return; // Don't throw error, just show message and return
     }
 
     // Update current session ID if it's a new session

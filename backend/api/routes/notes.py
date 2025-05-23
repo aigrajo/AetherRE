@@ -92,4 +92,38 @@ async def get_tag_types():
         "Structural": "Describes how the function fits into the program architecture (e.g., entrypoint, helper_function)",
         "Workflow": "Describes the analyst's workflow state (e.g., needs_review, suspicious)"
     }
-    return {"tag_types": tag_types} 
+    return {"tag_types": tag_types}
+
+@router.post("/cleanup/{binary}")
+async def cleanup_metadata(binary: str):
+    """Clean up all notes and tags files for a specific binary"""
+    try:
+        import glob
+        
+        # Clean up note files
+        note_pattern = notes_dir / f"{binary}_*_note.txt"
+        note_files = glob.glob(str(note_pattern))
+        for note_file in note_files:
+            try:
+                os.remove(note_file)
+                print(f"Removed note file: {note_file}")
+            except Exception as e:
+                print(f"Failed to remove note file {note_file}: {e}")
+        
+        # Clean up tag files
+        tag_file = data_dir / f"{binary}_function_tags.json"
+        if tag_file.exists():
+            try:
+                os.remove(tag_file)
+                print(f"Removed tag file: {tag_file}")
+            except Exception as e:
+                print(f"Failed to remove tag file {tag_file}: {e}")
+        
+        return {
+            "status": "success", 
+            "message": f"Cleaned up metadata files for binary: {binary}",
+            "note_files_removed": len(note_files),
+            "tag_files_removed": 1 if tag_file.exists() else 0
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error cleaning up metadata: {str(e)}") 

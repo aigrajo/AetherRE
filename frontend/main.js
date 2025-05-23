@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -54,6 +54,127 @@ function getBackendProcess() {
   return backendProcess;
 }
 
+// Create the application menu
+function createMenu() {
+  console.log('Creating application menu...');
+  const template = [
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'Load Binary...',
+          accelerator: 'CmdOrCtrl+O',
+          click: () => {
+            console.log('Load Binary menu clicked');
+            mainWindow.webContents.send('menu-action', 'load-file');
+          }
+        },
+        { type: 'separator' },
+        {
+          label: 'Save Project...',
+          accelerator: 'CmdOrCtrl+S',
+          enabled: false,
+          id: 'save-project',
+          click: () => {
+            console.log('Save Project menu clicked');
+            mainWindow.webContents.send('menu-action', 'save-project');
+          }
+        },
+        {
+          label: 'Save Project As...',
+          accelerator: 'CmdOrCtrl+Shift+S',
+          enabled: false,
+          id: 'save-project-as',
+          click: () => {
+            console.log('Save Project As menu clicked');
+            mainWindow.webContents.send('menu-action', 'save-project-as');
+          }
+        },
+        {
+          label: 'Load Project...',
+          accelerator: 'CmdOrCtrl+Shift+O',
+          enabled: false,
+          id: 'load-project',
+          click: () => {
+            console.log('Load Project menu clicked');
+            mainWindow.webContents.send('menu-action', 'load-project');
+          }
+        },
+        { type: 'separator' },
+        {
+          role: 'quit'
+        }
+      ]
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' }
+      ]
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' }
+      ]
+    },
+    {
+      label: 'Help',
+      submenu: [
+        {
+          label: 'About AetherRE',
+          click: () => {
+            console.log('About menu clicked');
+            dialog.showMessageBox(mainWindow, {
+              type: 'info',
+              title: 'About AetherRE',
+              message: 'AetherRE',
+              detail: 'A modern reverse engineering plugin built on Ghidra with an Electron GUI and AI-powered analysis capabilities.'
+            });
+          }
+        }
+      ]
+    }
+  ];
+
+  // macOS specific menu adjustments
+  if (process.platform === 'darwin') {
+    template.unshift({
+      label: app.getName(),
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideothers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' }
+      ]
+    });
+  }
+
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+  console.log('Application menu set successfully');
+  
+  return menu;
+}
+
 function createWindow() {
   // Create the browser window
   mainWindow = new BrowserWindow({
@@ -68,8 +189,14 @@ function createWindow() {
     icon: path.join(__dirname, 'assets', 'icon.png')
   });
 
-  // Load the index.html file
+  // Load the index.html file first
   mainWindow.loadFile('index.html');
+
+  // Create and set the application menu after window is ready
+  mainWindow.webContents.once('dom-ready', () => {
+    console.log('DOM ready, creating menu...');
+    createMenu();
+  });
 
   // Open DevTools in development mode
   if (process.argv.includes('--dev')) {
@@ -81,6 +208,19 @@ function createWindow() {
     mainWindow = null;
   });
 }
+
+// Handle enabling/disabling project menu items
+ipcMain.handle('enable-project-menu', (event, enabled) => {
+  const menu = Menu.getApplicationMenu();
+  if (menu) {
+    const saveItem = menu.getMenuItemById('save-project');
+    const saveAsItem = menu.getMenuItemById('save-project-as');
+    const loadItem = menu.getMenuItemById('load-project');
+    if (saveItem) saveItem.enabled = enabled;
+    if (saveAsItem) saveAsItem.enabled = enabled;
+    if (loadItem) loadItem.enabled = enabled;
+  }
+});
 
 // Create window when Electron has finished initialization
 app.whenReady().then(() => {
@@ -253,6 +393,179 @@ ipcMain.handle('analyze-binary', async (event, filePath) => {
     return result;
   } catch (error) {
     console.error('Error analyzing binary:', error);
+    throw error;
+  }
+});
+
+// Handle calculating file hash
+ipcMain.handle('calculate-file-hash', async (event, filePath) => {
+  try {
+    const crypto = require('crypto');
+    const hash = crypto.createHash('sha256');
+    
+    const fileBuffer = fs.readFileSync(filePath);
+    hash.update(fileBuffer);
+    
+    return hash.digest('hex');
+  } catch (error) {
+    console.error('Error calculating file hash:', error);
+    throw error;
+  }
+});
+
+// Handle saving project files
+ipcMain.handle('save-project', async (event, projectData, filename) => {
+  try {
+    const result = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: filename,
+      filters: [
+        { name: 'AetherRE Project Files', extensions: ['aetherre'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+
+    if (!result.canceled && result.filePath) {
+      fs.writeFileSync(result.filePath, JSON.stringify(projectData, null, 2), 'utf8');
+      console.log('Project saved to:', result.filePath);
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Error saving project:', error);
+    throw error;
+  }
+});
+
+// Handle writing project files directly (for Save without dialog)
+ipcMain.handle('write-project-file', async (event, filePath, projectData) => {
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(projectData, null, 2), 'utf8');
+    console.log('Project written to:', filePath);
+    return true;
+  } catch (error) {
+    console.error('Error writing project file:', error);
+    throw error;
+  }
+});
+
+// Handle loading project files
+ipcMain.handle('load-project', async (event, defaultPath) => {
+  try {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      defaultPath: defaultPath,
+      properties: ['openFile'],
+      filters: [
+        { name: 'AetherRE Project Files', extensions: ['aetherre'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+
+    if (!result.canceled && result.filePaths.length > 0) {
+      const filePath = result.filePaths[0];
+      const fileContent = fs.readFileSync(filePath, 'utf8');
+      const projectData = JSON.parse(fileContent);
+      
+      // Validate project file format
+      if (!projectData.aetherre_project || !projectData.target_binary) {
+        throw new Error('Invalid project file format');
+      }
+      
+      console.log('Project loaded from:', filePath);
+      return projectData;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error loading project:', error);
+    throw error;
+  }
+});
+
+// Handle showing binary file dialog
+ipcMain.handle('show-binary-dialog', async (event) => {
+  try {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile'],
+      filters: [
+        { name: 'Binary Files', extensions: ['exe', 'dll', 'so', 'dylib', 'bin'] },
+        { name: 'JSON Files', extensions: ['json'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+
+    if (!result.canceled && result.filePaths.length > 0) {
+      return result.filePaths[0];
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error showing binary dialog:', error);
+    throw error;
+  }
+});
+
+// Handle showing project load dialog
+ipcMain.handle('show-project-load-dialog', async (event) => {
+  try {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile'],
+      filters: [
+        { name: 'AetherRE Project Files', extensions: ['aetherre'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+
+    if (!result.canceled && result.filePaths.length > 0) {
+      const filePath = result.filePaths[0];
+      const fileContent = fs.readFileSync(filePath, 'utf8');
+      const projectData = JSON.parse(fileContent);
+      
+      // Validate project file format
+      if (!projectData.aetherre_project || !projectData.target_binary) {
+        throw new Error('Invalid project file format');
+      }
+      
+      console.log('Project loaded from:', filePath);
+      return {
+        projectData: projectData,
+        filePath: filePath
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error loading project via dialog:', error);
+    throw error;
+  }
+});
+
+// Handle showing project save dialog
+ipcMain.handle('show-project-save-dialog', async (event, projectData, defaultFilename) => {
+  try {
+    const result = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: defaultFilename,
+      filters: [
+        { name: 'AetherRE Project Files', extensions: ['aetherre'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+
+    if (!result.canceled && result.filePath) {
+      fs.writeFileSync(result.filePath, JSON.stringify(projectData, null, 2), 'utf8');
+      console.log('Project saved to:', result.filePath);
+      return {
+        success: true,
+        filePath: result.filePath
+      };
+    }
+    
+    return {
+      success: false,
+      filePath: null
+    };
+  } catch (error) {
+    console.error('Error saving project via dialog:', error);
     throw error;
   }
 }); 

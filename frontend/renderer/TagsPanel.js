@@ -451,4 +451,35 @@ async function saveCurrentTags() {
   } catch (error) {
     console.error('Error saving tags:', error);
   }
+}
+
+/**
+ * Get current tags for the project manager
+ * @returns {Array} Current tags array
+ */
+export function getCurrentTags() {
+  return currentTags;
+}
+
+/**
+ * Set current tags directly (used by project loading)
+ * @param {Array} tags - Array of tag objects to set
+ */
+export function setCurrentTags(tags) {
+  currentTags = tags || [];
+  
+  // Ensure all tags have required properties
+  currentTags.forEach(tag => {
+    if (!tag.color) {
+      tag.color = TAG_COLORS[Math.floor(Math.random() * TAG_COLORS.length)];
+    }
+    if (tag.includeInAI === undefined) {
+      tag.includeInAI = true;
+    }
+  });
+  
+  // Re-render the tags display
+  renderTags();
+  
+  console.log(`Set ${currentTags.length} tags in TagsPanel`);
 } 

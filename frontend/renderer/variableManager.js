@@ -95,6 +95,10 @@ export function renameVariable(oldName, newName) {
   if (state.currentFunction.local_variables) {
     state.currentFunction.local_variables.forEach(variable => {
       if (variable.name === oldName) {
+        // Track the original name if this is the first rename
+        if (!variable.originalName) {
+          variable.originalName = oldName;
+        }
         variable.name = newName;
       }
     });

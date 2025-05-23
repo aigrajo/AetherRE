@@ -212,6 +212,7 @@ function dispatchLoadData() {
   console.log(`TagNotePanel: Dispatching load events for ${cleanBinaryName}/${currentFunctionId}`);
   
   // Dispatch load note event
+  console.log(`TagNotePanel: Dispatching load-note event for ${cleanBinaryName}/${currentFunctionId}`);
   document.dispatchEvent(new CustomEvent('load-note', {
     detail: {
       binaryName: cleanBinaryName,
@@ -220,12 +221,15 @@ function dispatchLoadData() {
   }));
   
   // Dispatch load tags event
+  console.log(`TagNotePanel: Dispatching load-tags event for ${cleanBinaryName}/${currentFunctionId}`);
   document.dispatchEvent(new CustomEvent('load-tags', {
     detail: {
       binaryName: cleanBinaryName,
       functionId: currentFunctionId
     }
   }));
+  
+  console.log(`TagNotePanel: Finished dispatching load events for ${cleanBinaryName}/${currentFunctionId}`);
 }
 
 /**

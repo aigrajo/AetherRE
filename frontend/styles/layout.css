@@ -36,11 +36,17 @@
 .current-file {
   font-family: var(--font-mono, 'SF Mono', 'Fira Code', 'Consolas', monospace);
   color: var(--text-secondary);
-  margin-left: 12px;
+  font-size: 13px;
   font-weight: 400;
   opacity: 0.8;
   text-transform: none;
   letter-spacing: normal;
+}
+
+.file-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* Progress bar */
@@ -84,22 +90,61 @@
   white-space: nowrap;
 }
 
-.action-button:hover {
+.action-button:hover:not(:disabled) {
   background: var(--hover-color);
   border-color: var(--accent-color);
 }
 
+.action-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Project notifications */
+.project-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 12px 20px;
+  border-radius: 6px;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  animation: slideIn 0.3s ease-out;
+}
+
+.project-notification.success {
+  background: #4CAF50;
+}
+
+.project-notification.error {
+  background: #f44336;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
 /* Hide load button during analysis */
-.app-header.analyzing .action-button {
-  display: none;
+.app-header.analyzing .action-button:not(.progress-container *) {
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 /* Main content */
 .main-content {
-  display: grid;
-  grid-template-columns: 280px 1fr 300px;
-  height: calc(100vh - 60px);
-  position: relative;
+  display: flex;
+  flex: 1;
+  overflow: hidden;
 }
 
 /* Resizable panels */

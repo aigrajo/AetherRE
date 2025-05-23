@@ -83,7 +83,7 @@ function scheduleNoteSave(newContent) {
 /**
  * Save the note content
  */
-function saveNote(contentOrEvent) {
+async function saveNote(contentOrEvent) {
   // Clear any pending save timeouts
   if (saveTimeout) {
     clearTimeout(saveTimeout);
@@ -106,10 +106,30 @@ function saveNote(contentOrEvent) {
   const oldContent = lastSavedNote;
   const context = getCurrentContext();
   
-  // Save the note
-  // This would normally call a backend API
-  console.log('Saving note:', newContent);
-  console.log('Context:', context);
+  // Save the note to backend API
+  if (context && context.binaryName && context.functionId) {
+    try {
+      const response = await fetch(`http://localhost:8000/api/notes/${context.binaryName}/${context.functionId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content: newContent })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to save note: ${response.statusText}`);
+      }
+      
+      console.log(`Note saved for ${context.binaryName}/${context.functionId}`);
+    } catch (error) {
+      console.error('Error saving note:', error);
+      updateNoteStatusMessage('Save failed');
+      return;
+    }
+  } else {
+    console.warn('Cannot save note: missing context', context);
+  }
   
   // Record action for undo/redo
   recordAction({
@@ -193,16 +213,74 @@ export function setNoteContent(content) {
   // Set the content
   editor.value = content || '';
   
-  // Update saved state
+  // Update saved state - this content is considered "already saved"
   currentNote = content || '';
   lastSavedNote = content || '';
+  
+  // Clear any pending save timeouts since we're loading fresh content
+  if (saveTimeout) {
+    clearTimeout(saveTimeout);
+    saveTimeout = null;
+  }
+  
+  console.log(`NoteEditor: Content set to ${(content || '').length} characters`);
 }
 
 /**
  * Setup event listeners
  */
 function setupEventListeners() {
-  // Nothing to do here for now
+  // Listen for load note event from TagNotePanel
+  document.addEventListener('load-note', handleLoadNote);
+  
+  // Listen for clear note event from TagNotePanel
+  document.addEventListener('clear-note', handleClearNote);
+}
+
+/**
+ * Handle loading a note for a specific function
+ * @param {CustomEvent} event - The load-note event containing binary and function info
+ */
+async function handleLoadNote(event) {
+  const { binaryName, functionId } = event.detail;
+  
+  console.log(`NoteEditor: Loading note for ${binaryName}/${functionId}`);
+  
+  try {
+    // Load note from backend
+    const response = await fetch(`http://localhost:8000/api/notes/${binaryName}/${functionId}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to load note: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    // Update editor content
+    setNoteContent(data.content || '');
+    
+    // Update status
+    if (data.content && data.content.trim()) {
+      updateNoteStatusMessage('Note loaded');
+    } else {
+      updateNoteStatusMessage('No note for this function');
+    }
+    
+    console.log(`NoteEditor: Note loaded for ${binaryName}/${functionId}`);
+  } catch (error) {
+    console.error('Error loading note:', error);
+    setNoteContent('');
+    updateNoteStatusMessage('Failed to load note');
+  }
+}
+
+/**
+ * Handle clearing the note editor
+ */
+function handleClearNote() {
+  console.log('NoteEditor: Clearing note content');
+  setNoteContent('');
+  updateNoteStatusMessage('Ready');
 }
 
 /**

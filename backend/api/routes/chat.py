@@ -301,4 +301,50 @@ async def analyze_json(json_data: str):
             
         return {"type": "analysis_complete", "data": result}
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/restore")
+async def restore_chat_session(request: dict):
+    """Restore a chat session from project data."""
+    try:
+        session_id = request.get('session_id')
+        name = request.get('name')
+        created_at = request.get('created_at')
+        last_activity = request.get('last_activity')
+        messages = request.get('messages', [])
+        
+        if not session_id:
+            raise HTTPException(status_code=400, detail="Session ID is required")
+        
+        # Create a new ChatSession object with the restored data
+        from datetime import datetime
+        
+        restored_session = ChatSession(session_id=session_id)
+        
+        # Set the name separately since constructor doesn't accept it
+        restored_session.name = name or f"Restored Chat {session_id[:8]}"
+        
+        # Restore the timestamps
+        if created_at:
+            try:
+                restored_session.created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+            except ValueError:
+                pass  # Use default if parsing fails
+                
+        if last_activity:
+            try:
+                restored_session.last_activity = datetime.fromisoformat(last_activity.replace('Z', '+00:00'))
+            except ValueError:
+                pass  # Use default if parsing fails
+        
+        # Restore the messages
+        restored_session.messages = messages
+        
+        # Add to the global sessions dictionary
+        chat_sessions[session_id] = restored_session
+        
+        return {"status": "success", "message": f"Session {session_id} restored successfully"}
+        
+    except Exception as e:
+        print(f"Error restoring chat session: {e}")
         raise HTTPException(status_code=500, detail=str(e)) 

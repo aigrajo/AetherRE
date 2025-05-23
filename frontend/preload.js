@@ -1,3 +1,4 @@
+console.log('[PRELOAD] Starting preload script...');
 console.log('[DEBUG] Module search paths:', module.paths);
 console.log('[DEBUG] Current working directory:', process.cwd());
 
@@ -193,8 +194,30 @@ contextBridge.exposeInMainWorld('api', {
         // Clean up progress listener
         ipcRenderer.removeListener('analysis-progress', progressListener);
       });
-  }
+  },
+
+  // Project management APIs
+  calculateFileHash: (filePath) => ipcRenderer.invoke('calculate-file-hash', filePath),
+  saveProject: (projectData, filename) => ipcRenderer.invoke('save-project', projectData, filename),
+  loadProject: (defaultPath) => ipcRenderer.invoke('load-project', defaultPath),
+  
+  // Menu communication
+  enableProjectMenu: (enabled) => ipcRenderer.invoke('enable-project-menu', enabled),
+  onMenuAction: (callback) => {
+    console.log('Setting up menu action listener in preload...');
+    ipcRenderer.on('menu-action', (event, action) => {
+      console.log('Menu action received in preload:', action);
+      callback(event, action);
+    });
+  },
+  
+  // File dialog APIs
+  showBinaryDialog: () => ipcRenderer.invoke('show-binary-dialog'),
+  showProjectLoadDialog: () => ipcRenderer.invoke('show-project-load-dialog'),
+  showProjectSaveDialog: (projectData, defaultFilename) => ipcRenderer.invoke('show-project-save-dialog', projectData, defaultFilename)
 });
+
+console.log('[PRELOAD] API exposed successfully');
 
 contextBridge.exposeInMainWorld('electronAPI', {
   // ... existing exposed APIs ...
@@ -234,45 +257,59 @@ contextBridge.exposeInMainWorld('electronAPI', {
       let buffer = '';
       let sessionId = null;
 
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let eventEnd;
-        while ((eventEnd = buffer.indexOf('\n\n')) !== -1) {
-          const eventStr = buffer.slice(0, eventEnd);
-          buffer = buffer.slice(eventEnd + 2);
-          if (eventStr.startsWith('data: ')) {
-            try {
-              const dataObj = JSON.parse(eventStr.replace('data: ', '').trim());
-              if (dataObj.reply) {
-                fullReply += dataObj.reply;
-                sessionId = dataObj.session_id;
-                window.dispatchEvent(new CustomEvent('chat-chunk', { 
-                  detail: dataObj.reply,
-                  sessionId: dataObj.session_id
-                }));
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          
+          if (done) break;
+          
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              
+              if (data === '[DONE]') {
+                break;
               }
-            } catch (e) {
-              console.error('[Chat API] Error parsing streamed chunk:', e);
+              
+              try {
+                const parsed = JSON.parse(data);
+                if (parsed.reply) {
+                  fullReply += parsed.reply;
+                  
+                  // Dispatch chunk event for streaming updates
+                  window.dispatchEvent(new CustomEvent('chat-chunk', {
+                    detail: { content: parsed.reply, fullReply }
+                  }));
+                }
+                if (parsed.session_id) {
+                  sessionId = parsed.session_id;
+                }
+              } catch (parseError) {
+                console.warn('[Chat API] Failed to parse chunk:', data);
+              }
             }
           }
         }
+      } catch (streamError) {
+        console.error('[Chat API] Stream reading error:', streamError);
+        throw streamError;
       }
-      return { reply: fullReply, session_id: sessionId };
+
+      return {
+        reply: fullReply,
+        session_id: sessionId
+      };
+      
     } catch (error) {
-      console.error('[Chat API] Network error:', error);
-      if (error.name === 'AbortError') {
-        console.error('[Chat API] Request timed out after 30 seconds');
-        window.dispatchEvent(new CustomEvent('chat-chunk', { 
-          detail: 'Error: Request to AI service timed out. The backend server might not be running or is taking too long to respond.' 
-        }));
-      }
+      console.error('[Chat API] Error sending message:', error);
       throw error;
     }
   },
 
-  // New chat session APIs
   createNewChat: async () => {
     try {
       const response = await fetch('http://localhost:8000/api/chat/new', {
@@ -293,34 +330,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
 
-  clearChat: async (sessionId) => {
-    try {
-      const response = await fetch(`http://localhost:8000/api/chat/${sessionId}/clear`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.status} ${response.statusText}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('[Chat API] Error clearing chat:', error);
-      throw error;
-    }
-  },
-
   listChatSessions: async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/chat/sessions', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
+      const response = await fetch('http://localhost:8000/api/chat/sessions');
       
       if (!response.ok) {
         throw new Error(`Server error: ${response.status} ${response.statusText}`);
@@ -333,21 +345,49 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
 
+  clearChatSession: async (sessionId) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/chat/sessions/${sessionId}/clear`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status} ${response.statusText}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('[Chat API] Error clearing chat session:', error);
+      throw error;
+    }
+  },
+
   deleteChatSession: async (sessionId) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/chat/${sessionId}`, {
+      const response = await fetch(`http://localhost:8000/api/chat/sessions/${sessionId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
         }
       });
+      
       if (!response.ok) {
         throw new Error(`Server error: ${response.status} ${response.statusText}`);
       }
+      
       return await response.json();
     } catch (error) {
       console.error('[Chat API] Error deleting chat session:', error);
       throw error;
     }
   },
+
+  // Project management APIs
+  calculateFileHash: (filePath) => ipcRenderer.invoke('calculate-file-hash', filePath),
+  saveProject: (projectData, filename) => ipcRenderer.invoke('save-project', projectData, filename),
+  loadProject: (defaultPath) => ipcRenderer.invoke('load-project', defaultPath),
+  writeProjectFile: (filePath, projectData) => ipcRenderer.invoke('write-project-file', filePath, projectData)
 }); 

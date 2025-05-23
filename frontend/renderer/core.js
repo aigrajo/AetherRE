@@ -7,8 +7,20 @@ export const state = {
   currentFilePath: null,
   originalBinaryName: null,
   cfgInstance: null,
-  currentSessionId: null
+  currentSessionId: null,
+  currentProjectFile: null  // Track the current project file for Save vs Save As
 };
+
+// Update UI with file information
+export function updateUIWithFile(fileName) {
+  // Update current file display in header
+  const currentFileElement = document.getElementById('current-file');
+  if (currentFileElement) {
+    currentFileElement.textContent = fileName;
+  }
+  
+  console.log(`UI updated with file: ${fileName}`);
+}
 
 // Re-export state variables as global variables for compatibility
 export function exposeGlobals() {
@@ -36,30 +48,11 @@ export function exposeGlobals() {
   console.log("Global variables exposed and synchronized with state");
 }
 
-// Update UI when a file is loaded
-export function updateUIWithFile(fileName) {
-  // Update the document title
-  document.title = `AetherRE - ${fileName}`;
-  
-  // Update the header if needed
-  const headerElement = document.querySelector('.app-header h1');
-  if (headerElement) {
-    headerElement.textContent = 'AetherRE';
-    const fileSpan = document.createElement('span');
-    fileSpan.className = 'current-file';
-    fileSpan.textContent = fileName;
-    headerElement.appendChild(fileSpan);
-  }
-  
-  console.log(`UI updated with file: ${fileName}`);
-}
-
-// Main init function to initialize all modules
+// Initialize core module
 export function init() {
-  // The modules will be imported and initialized via the main renderer.js
-  // This function will be called after all module imports are complete
+  console.log('Core module initialized');
   
-  // Also ensure Monaco editors layout after a short delay on load
+  // Ensure Monaco editors layout after a short delay on load
   setTimeout(() => {
     if (state.monacoEditor && state.monacoEditor.layout) state.monacoEditor.layout();
     if (state.assemblyEditor && state.assemblyEditor.layout) state.assemblyEditor.layout();

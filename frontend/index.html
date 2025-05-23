@@ -26,9 +26,13 @@
 <body>
   <div class="app-container">
     <header class="app-header">
+      <div class="header-left">
       <h1>AetherRE</h1>
+        <span class="current-file" id="current-file">No file loaded</span>
+      </div>
       <div class="file-actions">
         <input type="file" id="file-input" accept=".exe,.dll,.bin,.json" style="display: none;">
+        <input type="file" id="project-input" accept=".aetherre" style="display: none;">
         <button id="load-file-btn" class="action-button">Load File</button>
         <div id="analysis-progress" class="progress-container" style="display: none;">
           <div class="progress-text">Analyzing binary...</div>
