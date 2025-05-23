@@ -397,7 +397,7 @@ function handleTagClick(event) {
  * Handle right-clicking on a tag (delete tag)
  * @param {Event} event - The click event
  */
-function handleTagRightClick(event) {
+async function handleTagRightClick(event) {
   event.preventDefault();
   const tagItem = event.currentTarget;
   
@@ -406,8 +406,11 @@ function handleTagRightClick(event) {
   const type = tagItem.getAttribute('data-type');
   const value = tagItem.getAttribute('data-value');
   
-  // Confirm deletion
-  if (confirm(`Delete tag '${value}'?`)) {
+  try {
+    // Use custom modal dialog for confirmation
+    await window.showInfoModal(`Delete tag '${value}'?`, "Confirm Delete");
+    
+    // If we get here, user confirmed deletion
     // Remove tag from current tags
     currentTags = currentTags.filter(tag => 
       !(tag.type === type && tag.value === value)
@@ -418,6 +421,9 @@ function handleTagRightClick(event) {
     
     // Save updated tags
     saveCurrentTags();
+  } catch (error) {
+    // Modal was dismissed/cancelled, do nothing
+    console.log('Tag deletion cancelled');
   }
 }
 

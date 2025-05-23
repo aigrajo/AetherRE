@@ -12,6 +12,8 @@ import {
 } from './chat.js';
 import { initTagNotePanel } from './TagNotePanel.js';
 import { PanelResizer } from '../resize.js';
+import { initHistoryManager } from './historyManager.js';
+import './modal.js'; // Initialize modal component
 
 // Initialize core module immediately to make state available
 console.log('Initializing core module...');
@@ -65,6 +67,10 @@ async function initApp() {
   // Initialize panel resizer
   console.log('Initializing panel resizer...');
   new PanelResizer();
+  
+  // Initialize history manager for undo/redo
+  console.log('Initializing history manager...');
+  initHistoryManager();
   
   // Ensure state variables are exposed as globals for compatibility
   console.log('Exposing globals for compatibility...');

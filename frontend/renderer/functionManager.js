@@ -3,8 +3,17 @@ import { switchTab } from './tabManager.js';
 import { updateAssemblyTab, updateXRefsTab, updateVariablesTab, updateStringsTab, updateCFGTab } from './tabManager.js';
 import { makeFunctionNameEditable } from './functionRenamer.js';
 
+// Debugging
+const DEBUG = true;
+function debugLog(...args) {
+  if (DEBUG) {
+    console.log('[FunctionManager]', ...args);
+  }
+}
+
 // Render the function list
 export function renderFunctionList(functions) {
+  debugLog(`Rendering function list with ${functions ? functions.length : 0} functions`);
   const functionList = document.getElementById('function-list');
   
   // Clear the list
@@ -38,6 +47,9 @@ export function renderFunctionList(functions) {
     
     functionList.appendChild(funcElement);
   });
+  
+  // Make renderFunctionList available globally for direct calls
+  window.renderFunctionList = renderFunctionList;
 }
 
 // Filter functions based on search term
@@ -55,24 +67,44 @@ export function filterFunctions(searchTerm) {
 // Function to display function info
 export function displayFunctionInfo(func) {
   if (!func) {
+    debugLog("displayFunctionInfo called with no function");
     return;
   }
+  
+  debugLog(`Displaying function info for: ${func.name} (${func.address})`);
   
   state.currentFunction = func;
   window.currentFunction = func; // For compatibility with existing code
   
   // Update function name and address
   const functionNameEl = document.getElementById('function-name');
-  functionNameEl.textContent = func.name;
-  makeFunctionNameEditable(functionNameEl, func.name);
+  if (functionNameEl) {
+    functionNameEl.textContent = func.name;
+    makeFunctionNameEditable(functionNameEl, func.name);
+  }
   
   const functionAddressEl = document.getElementById('function-address');
-  functionAddressEl.textContent = func.address;
+  if (functionAddressEl) {
+    functionAddressEl.textContent = func.address;
+  }
   
   // Update pseudocode
   if (state.monacoEditor) {
     const pseudocode = func.pseudocode || '// No pseudocode available';
-    state.monacoEditor.setValue(pseudocode);
+    debugLog(`Updating Monaco editor with pseudocode (${pseudocode.length} chars)`);
+    
+    // Ensure we're updating the model directly
+    const model = state.monacoEditor.getModel();
+    if (model) {
+      // Use setValue to replace the entire content
+      model.setValue(pseudocode);
+      
+      // Force layout update
+      state.monacoEditor.layout();
+    } else {
+      // Fallback if model isn't available
+      state.monacoEditor.setValue(pseudocode);
+    }
   }
 
   // Update tabs based on data availability
@@ -83,7 +115,7 @@ export function displayFunctionInfo(func) {
   updateCFGTab(func);
   
   // Dispatch event for TagNote panel
-  console.log(`Dispatching function-selected event for ${func.name} (${func.address})`);
+  debugLog(`Dispatching function-selected event for ${func.name} (${func.address})`);
   window.dispatchEvent(new CustomEvent('function-selected', {
     detail: {
       functionId: func.address,
@@ -94,6 +126,7 @@ export function displayFunctionInfo(func) {
 
 // Setup function filter event listener
 export function setupFunctionFilter() {
+  debugLog("Setting up function filter");
   const functionFilter = document.getElementById('function-filter');
   functionFilter.addEventListener('input', (event) => {
     filterFunctions(event.target.value);

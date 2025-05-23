@@ -1,6 +1,7 @@
 // NoteEditor.js - CodeMirror-based note editor component
 
 import { getCurrentContext } from './TagNotePanel.js';
+import { recordAction } from './historyManager.js';
 
 // CodeMirror editor instance
 let editor = null;
@@ -53,200 +54,161 @@ function setupEditor() {
 }
 
 /**
- * Set up event listeners for note loading/saving
- */
-function setupEventListeners() {
-  // Listen for load note event
-  document.addEventListener('load-note', handleLoadNote);
-  
-  // Listen for clear note event
-  document.addEventListener('clear-note', handleClearNote);
-}
-
-/**
- * Handle note change and schedule autosave
+ * Handle note content change
  */
 function handleNoteChange() {
   if (!editor) return;
+
+  const newNote = editor.value;
   
-  const newContent = editor.value;
-  currentNote = newContent;
-  
-  // Clear previous timeout if it exists
+  // Schedule a save operation
+  scheduleNoteSave(newNote);
+}
+
+/**
+ * Schedule a note save operation
+ */
+function scheduleNoteSave(newContent) {
+  // Clear any existing timeout
   if (saveTimeout) {
     clearTimeout(saveTimeout);
   }
   
-  // Set new timeout for autosave (3 seconds after last change)
+  // Set a new timeout
   saveTimeout = setTimeout(() => {
-    saveNote();
-  }, 3000);
+    saveNote(newContent);
+  }, 1000); // Save 1 second after typing stops
 }
 
 /**
- * Save the current note
+ * Save the note content
  */
-async function saveNote() {
-  if (!editor) {
-    console.error('No editor instance found when trying to save');
-    return;
+function saveNote(contentOrEvent) {
+  // Clear any pending save timeouts
+  if (saveTimeout) {
+    clearTimeout(saveTimeout);
+    saveTimeout = null;
   }
   
-  // Get current context
-  const { binaryName, functionId } = getCurrentContext();
-  if (!binaryName || !functionId) {
-    console.error('Missing context for saving note:', { binaryName, functionId });
-    return;
-  }
-  
-  // Get current note content
-  const content = editor.value;
-  
-  // Don't save if nothing has changed
-  if (content === lastSavedNote) return;
-  
-  // Clean binary name (remove special characters and spaces)
-  const cleanBinaryName = binaryName.replace(/[^\w\d]/g, '_');
-  
-  console.log(`Saving note for ${cleanBinaryName}/${functionId}`, { contentLength: content.length });
-  
-  try {
-    // Construct URL for API endpoint
-    const url = `http://localhost:8000/api/notes/${cleanBinaryName}/${functionId}`;
-    console.log(`POST Request to: ${url}`);
-    
-    // Save note to backend
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ content })
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Failed to save note: ${response.status} ${response.statusText}`, errorText);
-      throw new Error(`Failed to save note: ${response.statusText}`);
-    }
-    
-    // Log the response
-    const responseData = await response.json();
-    console.log(`Save note response:`, responseData);
-    
-    // Update last saved state
-    lastSavedNote = content;
-    lastSaveTime = new Date();
-    
-    console.log(`Successfully saved note for ${cleanBinaryName}/${functionId}`);
-    
-    // Update status
-    updateSaveStatus();
-  } catch (error) {
-    console.error('Error saving note:', error);
-  }
-}
-
-/**
- * Update the save status display
- */
-function updateSaveStatus() {
-  const statusElement = document.getElementById('note-status');
-  if (!statusElement) return;
-  
-  if (!lastSaveTime) {
-    statusElement.textContent = 'Last saved: Never';
-    return;
-  }
-  
-  const now = new Date();
-  const diff = now - lastSaveTime;
-  
-  let timeText;
-  if (diff < 60000) {
-    timeText = 'Just now';
-  } else if (diff < 3600000) {
-    timeText = `${Math.floor(diff / 60000)} minutes ago`;
+  // If called from an event listener, get content from editor
+  let newContent;
+  if (contentOrEvent && typeof contentOrEvent === 'object') {
+    if (!editor) return;
+    newContent = editor.value;
   } else {
-    timeText = `${Math.floor(diff / 3600000)} hours ago`;
+    newContent = contentOrEvent;
   }
   
-  statusElement.textContent = `Last saved: ${timeText}`;
+  // Don't save if nothing changed
+  if (newContent === lastSavedNote) return;
+  
+  // Store old content for undo/redo
+  const oldContent = lastSavedNote;
+  const context = getCurrentContext();
+  
+  // Save the note
+  // This would normally call a backend API
+  console.log('Saving note:', newContent);
+  console.log('Context:', context);
+  
+  // Record action for undo/redo
+  recordAction({
+    type: 'edit_note',
+    oldState: {
+      content: oldContent,
+      context: JSON.parse(JSON.stringify(context))
+    },
+    newState: {
+      content: newContent,
+      context: JSON.parse(JSON.stringify(context))
+    },
+    undo: () => {
+      // Restore the old note content if we're on the same context
+      const currentContext = getCurrentContext();
+      if (currentContext && 
+          context && 
+          currentContext.type === context.type && 
+          currentContext.id === context.id) {
+        
+        if (editor) {
+          editor.value = oldContent;
+          lastSavedNote = oldContent;
+          currentNote = oldContent;
+          
+          // Update UI elements to show note was restored
+          updateNoteStatusMessage('Restored previous note version');
+        }
+      }
+    },
+    redo: () => {
+      // Restore the new note content if we're on the same context
+      const currentContext = getCurrentContext();
+      if (currentContext && 
+          context && 
+          currentContext.type === context.type && 
+          currentContext.id === context.id) {
+        
+        if (editor) {
+          editor.value = newContent;
+          lastSavedNote = newContent;
+          currentNote = newContent;
+          
+          // Update UI elements to show note was restored
+          updateNoteStatusMessage('Restored newer note version');
+        }
+      }
+    }
+  });
+  
+  // Update saved note state
+  lastSavedNote = newContent;
+  lastSaveTime = new Date();
+  
+  // Update UI
+  updateNoteStatusMessage('Saved');
 }
 
 /**
- * Handle loading a note
- * @param {CustomEvent} event - The load-note event
+ * Update the note status message
  */
-async function handleLoadNote(event) {
-  if (!editor) {
-    console.error('No editor instance found when trying to load note');
-    return;
-  }
-  
-  const { binaryName, functionId } = event.detail;
-  if (!binaryName || !functionId) {
-    console.error('Missing details for loading note:', event.detail);
-    return;
-  }
-  
-  // Clean binary name (remove special characters and spaces)
-  const cleanBinaryName = binaryName.replace(/[^\w\d]/g, '_');
-  
-  console.log(`Loading note for ${cleanBinaryName}/${functionId}`);
-  
-  try {
-    // Load note from backend
-    const url = `http://localhost:8000/api/notes/${cleanBinaryName}/${functionId}`;
-    console.log(`Fetching note from ${url}`);
+function updateNoteStatusMessage(message) {
+  const statusElement = document.querySelector('.note-status');
+  if (statusElement) {
+    statusElement.textContent = message;
+    statusElement.style.opacity = '1';
     
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Failed to load note: ${response.status} ${response.statusText}`, errorText);
-      throw new Error(`Failed to load note: ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    console.log(`Received note data:`, { hasContent: !!data.content, contentLength: data.content ? data.content.length : 0 });
-    
-    // Set editor content
-    editor.value = data.content || '';
-    
-    // Update state
-    lastSavedNote = data.content || '';
-    currentNote = data.content || '';
-    
-    // Set last save time if note exists
-    if (data.content) {
-      lastSaveTime = new Date();
-    } else {
-      lastSaveTime = null;
-    }
-    
-    // Update status
-    updateSaveStatus();
-  } catch (error) {
-    console.error('Error loading note:', error);
-    editor.value = '';
-    lastSavedNote = '';
-    currentNote = '';
-    lastSaveTime = null;
-    updateSaveStatus();
+    // Fade out after a delay
+    setTimeout(() => {
+      statusElement.style.opacity = '0';
+    }, 2000);
   }
 }
 
 /**
- * Handle clearing the note
+ * Set editor content
  */
-function handleClearNote() {
+export function setNoteContent(content) {
   if (!editor) return;
   
-  // Clear editor content
-  editor.value = '';
-  lastSavedNote = '';
-  currentNote = '';
-  lastSaveTime = null;
-  updateSaveStatus();
+  // Set the content
+  editor.value = content || '';
+  
+  // Update saved state
+  currentNote = content || '';
+  lastSavedNote = content || '';
+}
+
+/**
+ * Setup event listeners
+ */
+function setupEventListeners() {
+  // Nothing to do here for now
+}
+
+/**
+ * Get the current note content
+ */
+export function getNoteContent() {
+  if (!editor) return '';
+  return editor.value;
 }
