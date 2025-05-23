@@ -1,35 +1,11 @@
 // TagsPanel.js - Component for managing function tags
 
 import { getCurrentContext } from './TagNotePanel.js';
+import { apiService } from './apiService.js';
 
-// Tag type definitions
-const TAG_TYPES = {
-  Behavioral: {
-    description: "Describes what the function does",
-    examples: ["decryptor", "c2_handler", "keygen", "network_comm"]
-  },
-  Structural: {
-    description: "Describes how the function fits into the program architecture",
-    examples: ["entrypoint", "syscall_wrapper", "helper_function"]
-  },
-  Workflow: {
-    description: "Describes the analyst's workflow state",
-    examples: ["needs_review", "stumped", "false_positive", "suspicious"]
-  }
-};
-
-// Predefined tag colors
-const TAG_COLORS = [
-  "#20D709", // Green
-  "#0000FF", // Blue
-  "#E91E63", // Pink
-  "#FF4500", // Orange
-  "#9C27B0", // Purple
-  "#FFD500", // Yellow
-  "#FF0000 ", // Red
-  "#009688", // Teal
-  "#8BC34A"  // Lime
-];
+// Global reference to tag types and colors (will be loaded from backend)
+let TAG_TYPES = {};
+let TAG_COLORS = [];
 
 // Current tags state
 let currentTags = [];
@@ -37,12 +13,44 @@ let currentTags = [];
 /**
  * Initialize the tags panel
  */
-export function initTagsPanel() {
-  // Set up the initial panel UI
-  setupTagsPanel();
-  
-  // Set up event listeners
-  setupEventListeners();
+export async function initTagsPanel() {
+  try {
+    // Load tag types and colors from backend
+    const [typesResponse, colorsResponse] = await Promise.all([
+      apiService.getTagTypes(),
+      apiService.getTagColors()
+    ]);
+    
+    TAG_TYPES = typesResponse.tag_types;
+    TAG_COLORS = colorsResponse.colors;
+    
+    // Set up the initial panel UI
+    setupTagsPanel();
+    
+    // Set up event listeners
+    setupEventListeners();
+  } catch (error) {
+    console.error('Failed to initialize tags panel:', error);
+    // Fallback to default values if backend is unavailable
+    TAG_TYPES = {
+      Behavioral: {
+        description: "Describes what the function does",
+        examples: ["decryptor", "c2_handler", "keygen", "network_comm"]
+      },
+      Structural: {
+        description: "Describes how the function fits into the program architecture",
+        examples: ["entrypoint", "syscall_wrapper", "helper_function"]
+      },
+      Workflow: {
+        description: "Describes the analyst's workflow state",
+        examples: ["needs_review", "stumped", "false_positive", "suspicious"]
+      }
+    };
+    TAG_COLORS = ["#20D709", "#0000FF", "#E91E63", "#FF4500", "#9C27B0", "#FFD500", "#FF0000", "#009688", "#8BC34A"];
+    
+    setupTagsPanel();
+    setupEventListeners();
+  }
 }
 
 /**
@@ -196,7 +204,7 @@ function setupNewTagForm() {
 /**
  * Add a new tag based on form input
  */
-function addNewTag() {
+async function addNewTag() {
   const tagInput = document.getElementById('new-tag-input');
   const tagType = document.getElementById('new-tag-type');
   const colorPreview = document.getElementById('color-preview');
@@ -204,35 +212,43 @@ function addNewTag() {
   if (!tagInput || !tagType || !colorPreview) return;
   
   const tagValue = tagInput.value.trim();
-  const tagTypeName = tagType.value;
-  const tagColor = colorPreview.style.backgroundColor || TAG_COLORS[0];
+  const selectedType = tagType.value;
+  const selectedColor = colorPreview.style.backgroundColor;
   
-  if (!tagValue) return;
+  if (!tagValue) {
+    alert('Please enter a tag value');
+    return;
+  }
   
-  // Create new tag object
-  const newTag = {
-    type: tagTypeName,
-    value: tagValue,
-    color: tagColor,
-    includeInAI: true
-  };
-  
-  // Add to current tags if not already present
-  const exists = currentTags.some(tag => 
-    tag.type === newTag.type && tag.value === newTag.value
-  );
-  
-  if (!exists) {
-    currentTags.push(newTag);
+  try {
+    const context = getCurrentContext();
+    if (!context || !context.binaryName || !context.functionId) {
+      alert('No function selected');
+      return;
+    }
     
-    // Update UI
-    renderTags();
+    // Use backend API to add the tag with validation
+    const result = await apiService.addTag(
+      context.binaryName,
+      context.functionId,
+      selectedType,
+      tagValue,
+      rgbToHex(selectedColor), // Convert RGB to hex
+      true // include in AI by default
+    );
     
-    // Save tags
-    saveCurrentTags();
-    
-    // Clear input
-    tagInput.value = '';
+    if (result.success) {
+      // Clear form
+      tagInput.value = '';
+      
+      // Reload tags to show the new one
+      await loadCurrentTags();
+    } else {
+      alert(result.message || 'Failed to add tag');
+    }
+  } catch (error) {
+    console.error('Error adding tag:', error);
+    alert('Error adding tag: ' + error.message);
   }
 }
 
@@ -266,17 +282,11 @@ async function handleLoadTags(event) {
   const { binaryName, functionId } = event.detail;
   
   try {
-    // Load tags from backend
-    const response = await fetch(`http://localhost:8000/api/tags/${binaryName}/${functionId}`);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to load tags: ${response.statusText}`);
-    }
-    
-    const data = await response.json();
+    // Load tags from backend using API service
+    const response = await apiService.getTags(binaryName, functionId);
     
     // Update state
-    currentTags = data.tags || [];
+    currentTags = response.tags || [];
     
     // Ensure all tags have colors
     currentTags.forEach(tag => {
@@ -367,7 +377,7 @@ function setupTagEventListeners() {
  * Handle left-clicking on a tag (toggle AI inclusion)
  * @param {Event} event - The click event
  */
-function handleTagClick(event) {
+async function handleTagClick(event) {
   event.preventDefault();
   const tagItem = event.currentTarget;
   
@@ -376,21 +386,8 @@ function handleTagClick(event) {
   const type = tagItem.getAttribute('data-type');
   const value = tagItem.getAttribute('data-value');
   
-  // Update tag in current tags
-  const tagIndex = currentTags.findIndex(tag => 
-    tag.type === type && tag.value === value
-  );
-  
-  if (tagIndex !== -1) {
-    // Toggle includeInAI
-    currentTags[tagIndex].includeInAI = !currentTags[tagIndex].includeInAI;
-    
-    // Toggle active class
-    tagItem.classList.toggle('active', currentTags[tagIndex].includeInAI);
-    
-    // Save updated tags
-    saveCurrentTags();
-  }
+  // Toggle AI inclusion using backend API
+  await toggleTagAiInclusion(type, value);
 }
 
 /**
@@ -411,16 +408,7 @@ async function handleTagRightClick(event) {
     await window.showInfoModal(`Delete tag '${value}'?`, "Confirm Delete");
     
     // If we get here, user confirmed deletion
-    // Remove tag from current tags
-    currentTags = currentTags.filter(tag => 
-      !(tag.type === type && tag.value === value)
-    );
-    
-    // Update UI
-    renderTags();
-    
-    // Save updated tags
-    saveCurrentTags();
+    await removeTag(type, value);
   } catch (error) {
     // Modal was dismissed/cancelled, do nothing
     console.log('Tag deletion cancelled');
@@ -432,22 +420,13 @@ async function handleTagRightClick(event) {
  */
 async function saveCurrentTags() {
   // Get current context
-  const { binaryName, functionId } = getCurrentContext();
-  if (!binaryName || !functionId) return;
+  const context = getCurrentContext();
+  if (!context || !context.binaryName || !context.functionId) return;
   
   try {
-    // Save tags to backend
-    const response = await fetch(`http://localhost:8000/api/tags/${binaryName}/${functionId}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ tags: currentTags })
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to save tags: ${response.statusText}`);
-    }
+    // Save tags to backend using API service
+    await apiService.saveTags(context.binaryName, context.functionId, currentTags);
+    console.log('Tags saved successfully');
   } catch (error) {
     console.error('Error saving tags:', error);
   }
@@ -482,4 +461,94 @@ export function setCurrentTags(tags) {
   renderTags();
   
   console.log(`Set ${currentTags.length} tags in TagsPanel`);
+}
+
+/**
+ * Remove a tag
+ */
+async function removeTag(tagType, tagValue) {
+  try {
+    const context = getCurrentContext();
+    if (!context || !context.binaryName || !context.functionId) {
+      return;
+    }
+    
+    const result = await apiService.removeTag(
+      context.binaryName,
+      context.functionId,
+      tagType,
+      tagValue
+    );
+    
+    if (result.success) {
+      // Reload tags to reflect the removal
+      await loadCurrentTags();
+    } else {
+      alert(result.message || 'Failed to remove tag');
+    }
+  } catch (error) {
+    console.error('Error removing tag:', error);
+    alert('Error removing tag: ' + error.message);
+  }
+}
+
+/**
+ * Toggle AI inclusion for a tag
+ */
+async function toggleTagAiInclusion(tagType, tagValue) {
+  try {
+    const context = getCurrentContext();
+    if (!context || !context.binaryName || !context.functionId) {
+      return;
+    }
+    
+    const result = await apiService.toggleAiInclusion(
+      context.binaryName,
+      context.functionId,
+      tagType,
+      tagValue
+    );
+    
+    if (result.success) {
+      // Reload tags to reflect the change
+      await loadCurrentTags();
+    } else {
+      alert(result.message || 'Failed to toggle AI inclusion');
+    }
+  } catch (error) {
+    console.error('Error toggling AI inclusion:', error);
+    alert('Error toggling AI inclusion: ' + error.message);
+  }
+}
+
+/**
+ * Load current tags for the selected function
+ */
+async function loadCurrentTags() {
+  try {
+    const context = getCurrentContext();
+    if (!context || !context.binaryName || !context.functionId) {
+      currentTags = [];
+      renderTags();
+      return;
+    }
+    
+    const response = await apiService.getTags(context.binaryName, context.functionId);
+    currentTags = response.tags || [];
+    renderTags();
+  } catch (error) {
+    console.error('Error loading tags:', error);
+    currentTags = [];
+    renderTags();
+  }
+}
+
+// Utility function to convert RGB color to hex
+function rgbToHex(rgb) {
+  if (rgb.startsWith('#')) return rgb;
+  
+  const result = rgb.match(/\d+/g);
+  if (!result || result.length < 3) return '#000000';
+  
+  return '#' + ((1 << 24) + (parseInt(result[0]) << 16) + (parseInt(result[1]) << 8) + parseInt(result[2])).toString(16).slice(1);
 } 

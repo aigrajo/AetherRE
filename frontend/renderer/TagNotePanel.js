@@ -240,8 +240,14 @@ export function getCurrentContext() {
   // Clean binary name to ensure proper filesystem compatibility
   const cleanBinaryName = currentBinary ? currentBinary.replace(/[^\w\d]/g, '_') : null;
   
-  return {
+  const context = {
     binaryName: cleanBinaryName,
     functionId: currentFunctionId
   };
+  
+  console.log('getCurrentContext() returning:', context);
+  console.log('- currentBinary:', currentBinary);
+  console.log('- currentFunctionId:', currentFunctionId);
+  
+  return context;
 } 

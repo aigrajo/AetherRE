@@ -1,91 +1,63 @@
 import { state } from './core.js';
 import { recordAction } from './historyManager.js';
+import { apiService } from './apiService.js';
 
 // Function to rename a variable
-export function renameVariable(oldName, newName) {
+export async function renameVariable(oldName, newName) {
   if (!state.currentFunction || !oldName || !newName || oldName === newName) return false;
   
   console.log(`Attempting to rename variable from "${oldName}" to "${newName}"`);
   
-  // Validate the new name format - only allow alphanumeric and underscore
-  const validNamePattern = /^[a-zA-Z0-9_]+$/;
-  if (!validNamePattern.test(newName)) {
-    console.error(`Cannot rename to "${newName}" - only alphanumeric characters and underscores are allowed`);
-    window.showErrorModal(`Invalid name: "${newName}" - only letters, numbers, and underscores are allowed.`);
-    return false;
-  }
-  
-  // Don't allow names starting with a number
-  if (/^[0-9]/.test(newName)) {
-    console.error(`Cannot rename to "${newName}" - names cannot start with a number`);
-    window.showErrorModal(`Invalid name: "${newName}" - names cannot start with a number.`);
-    return false;
-  }
-  
-  // Check if the new name exists anywhere in the pseudocode except in variable declarations
-  if (state.currentFunction && state.currentFunction.pseudocode) {
-    const pseudocode = state.currentFunction.pseudocode;
-    
-    // Modified check to avoid false positives on the variable we're renaming:
-    // 1. Don't consider exact matches to the variable declaration pattern
-    const declarationPattern = new RegExp(`(int|char|long|float|double|bool)\\s+${oldName}\\s*;`);
-    const usagePattern = new RegExp(`\\b${oldName}\\b`);
-    
-    // Do a simple check for the existence of the new name in pseudocode
-    if (pseudocode.indexOf(newName) >= 0) {
-      // Now check if the matches are ONLY in the variable declaration or the variable we're renaming
-      // If so, that's okay because we'll be replacing those
-      
-      const firstIndex = pseudocode.indexOf(newName);
-      const declarationIndex = pseudocode.search(declarationPattern);
-      const isPartOfCurrentVariable = usagePattern.test(pseudocode) && 
-                                    (declarationIndex >= 0 ||
-                                     pseudocode.indexOf(oldName) >= 0);
-      
-      // If we find the new name in a context other than replacing the old variable
-      if (isPartOfCurrentVariable === false) {
-        console.error(`Cannot rename to "${newName}" - this name exists as part of other identifiers in the pseudocode`);
-        console.debug(`Found "${newName}" at position ${firstIndex}, declaration is at ${declarationIndex}`);
-        window.showErrorModal(`Cannot rename to "${newName}" - this name exists as part of other identifiers in the pseudocode and would cause conflicts.`);
-        return false;
-      } else {
-        console.log(`Found "${newName}" but only in our variable context, allowing rename`);
-      }
+  // Use backend validation instead of frontend validation
+  return await validateAndRenameVariable(oldName, newName);
+}
+
+// New function to validate and rename using backend service
+async function validateAndRenameVariable(oldName, newName) {
+  try {
+    // Ensure we have valid current function data
+    if (!state.currentFunction) {
+      throw new Error("No current function selected");
     }
     
-    // Expanded list of C language keywords - case insensitive check
-    const cKeywords = [
-      'auto', 'break', 'case', 'char', 'const', 'continue', 'default', 'do', 
-      'double', 'else', 'enum', 'extern', 'float', 'for', 'goto', 'if', 
-      'int', 'long', 'register', 'return', 'short', 'signed', 'sizeof', 
-      'static', 'struct', 'switch', 'typedef', 'union', 'unsigned', 'void', 
-      'volatile', 'while'
-    ];
+    console.log(`Current function for variable rename: ${state.currentFunction.name || 'unnamed'}`);
+    console.log(`Local variables available:`, state.currentFunction.local_variables ? state.currentFunction.local_variables.length : 0);
     
-    if (cKeywords.some(keyword => keyword.toLowerCase() === newName.toLowerCase())) {
-      console.error(`Cannot rename to "${newName}" - this is a reserved keyword`);
-      window.showErrorModal(`Cannot rename to "${newName}" - this is a reserved C keyword and would cause conflicts.`);
+    // Call backend validation service using our API service
+    const validationResult = await apiService.validateVariableName(
+      oldName,
+      newName,
+      state.currentFunction.local_variables || [],
+      state.currentFunction.pseudocode
+    );
+    
+    if (!validationResult.is_valid) {
+      console.error(`Cannot rename to "${newName}": ${validationResult.error_message}`);
+      window.showErrorModal(validationResult.error_message);
       return false;
     }
     
-    // Check variable conflicts
-    if (state.currentFunction.local_variables) {
-      const existingVar = state.currentFunction.local_variables.find(v => v.name === newName && v.name !== oldName);
-      if (existingVar) {
-        console.error(`Cannot rename to "${newName}" - a variable with this name already exists`);
-        window.showErrorModal(`Cannot rename to "${newName}" - a variable with this name already exists in this function.`);
-        return false;
-      }
-    }
+    // Validation passed, perform the rename
+    return performVariableRename(oldName, newName);
+    
+  } catch (error) {
+    console.error('Error during validation:', error);
+    window.showErrorModal(`Validation failed: ${error.message}`);
+    return false;
   }
+}
+
+// Function to perform the actual rename after validation passes
+function performVariableRename(oldName, newName) {
+  console.log(`Performing variable rename from "${oldName}" to "${newName}"`);
   
-  // All validation passed, now actually perform the rename
-  console.log(`Renaming variable from "${oldName}" to "${newName}"`);
+  // Get the function identifier (use address as primary, fallback to id)
+  const functionId = state.currentFunction.address || state.currentFunction.id;
   
   // Store old state for history
   const oldState = {
     name: oldName,
-    functionId: state.currentFunction.id,
+    functionId: functionId,
     functionName: state.currentFunction.name,
     pseudocode: state.currentFunction.pseudocode,
     localVariables: state.currentFunction.local_variables ? JSON.parse(JSON.stringify(state.currentFunction.local_variables)) : null
@@ -137,7 +109,7 @@ export function renameVariable(oldName, newName) {
   // Store new state for history
   const newState = {
     name: newName,
-    functionId: state.currentFunction.id,
+    functionId: functionId,
     functionName: state.currentFunction.name,
     pseudocode: state.currentFunction.pseudocode,
     localVariables: state.currentFunction.local_variables ? JSON.parse(JSON.stringify(state.currentFunction.local_variables)) : null
@@ -145,6 +117,13 @@ export function renameVariable(oldName, newName) {
   
   // Log whether pseudocode was updated
   console.log(`Pseudocode updated: ${updatedPseudocode}, old length: ${oldState.pseudocode.length}, new length: ${newState.pseudocode.length}`);
+  
+  // IMPORTANT: Update function name display after variable rename
+  const functionNameEl = document.getElementById('function-name');
+  if (functionNameEl && state.currentFunction.name) {
+    functionNameEl.textContent = state.currentFunction.name;
+    console.log(`Updated function name display to: ${state.currentFunction.name}`);
+  }
   
   // Record action for undo/redo
   recordAction({
@@ -154,8 +133,9 @@ export function renameVariable(oldName, newName) {
     undo: () => {
       console.log(`Undoing rename of variable from "${newName}" to "${oldState.name}"`);
       
-      // Only perform undo if we're still on the same function
-      if (state.currentFunction && state.currentFunction.id === oldState.functionId) {
+      // Check if we're still on the same function (use address/id)
+      const currentFunctionId = state.currentFunction?.address || state.currentFunction?.id;
+      if (state.currentFunction && currentFunctionId === oldState.functionId) {
         // 1. Restore the old variable name
         if (state.currentFunction.local_variables) {
           state.currentFunction.local_variables.forEach(variable => {
@@ -175,7 +155,13 @@ export function renameVariable(oldName, newName) {
           updateMonacoEditorContent(oldState.pseudocode);
         }
         
-        // 4. Update variables table
+        // 4. Update function name display
+        const functionNameEl = document.getElementById('function-name');
+        if (functionNameEl && state.currentFunction.name) {
+          functionNameEl.textContent = state.currentFunction.name;
+        }
+        
+        // 5. Update variables table
         const variablesTable = document.querySelector('#variables-table tbody');
         if (variablesTable && state.currentFunction.local_variables) {
           variablesTable.innerHTML = '';
@@ -184,7 +170,6 @@ export function renameVariable(oldName, newName) {
             const row = document.createElement('tr');
             const nameCell = document.createElement('td');
             nameCell.textContent = variable.name || 'unnamed';
-            // Make it editable but without causing recursion
             nameCell.classList.add('editable');
             nameCell.setAttribute('data-variable-name', variable.name || 'unnamed');
             nameCell.title = 'Click to rename variable';
@@ -197,27 +182,20 @@ export function renameVariable(oldName, newName) {
             `;
             row.firstElementChild.replaceWith(nameCell);
             variablesTable.appendChild(row);
+            
+            // IMPORTANT: Make the name cell editable by attaching click handler
+            makeVariableEditable(nameCell, variable.name || 'unnamed');
           });
-          
-          // Add click listeners to cells after table rebuild
-          setTimeout(() => {
-            const cells = variablesTable.querySelectorAll('.editable');
-            cells.forEach(cell => {
-              if (!cell.hasClickListener) {
-                makeVariableEditable(cell, cell.textContent);
-                cell.hasClickListener = true;
-              }
-            });
-          }, 0);
         }
       }
     },
     redo: () => {
       console.log(`Redoing rename of variable from "${oldState.name}" to "${newName}"`);
       
-      // Only perform redo if we're still on the same function
-      if (state.currentFunction && state.currentFunction.id === newState.functionId) {
-        // 1. Restore the new variable name
+      // Check if we're still on the same function (use address/id)
+      const currentFunctionId = state.currentFunction?.address || state.currentFunction?.id;
+      if (state.currentFunction && currentFunctionId === newState.functionId) {
+        // 1. Apply the new variable name
         if (state.currentFunction.local_variables) {
           state.currentFunction.local_variables.forEach(variable => {
             if (variable.name === oldState.name) {
@@ -226,17 +204,23 @@ export function renameVariable(oldName, newName) {
           });
         }
         
-        // 2. Restore pseudocode - IMPORTANT: use the stored pseudocode rather than trying to do a replace
+        // 2. Restore pseudocode
         state.currentFunction.pseudocode = newState.pseudocode;
         
-        // 3. Update Monaco editor immediately with the new pseudocode
+        // 3. Update Monaco editor
         if (window.updateMonacoEditorContent) {
           window.updateMonacoEditorContent(newState.pseudocode);
         } else {
           updateMonacoEditorContent(newState.pseudocode);
         }
         
-        // 4. Update variables table
+        // 4. Update function name display
+        const functionNameEl = document.getElementById('function-name');
+        if (functionNameEl && state.currentFunction.name) {
+          functionNameEl.textContent = state.currentFunction.name;
+        }
+        
+        // 5. Update variables table
         const variablesTable = document.querySelector('#variables-table tbody');
         if (variablesTable && state.currentFunction.local_variables) {
           variablesTable.innerHTML = '';
@@ -245,7 +229,6 @@ export function renameVariable(oldName, newName) {
             const row = document.createElement('tr');
             const nameCell = document.createElement('td');
             nameCell.textContent = variable.name || 'unnamed';
-            // Make it editable but without causing recursion
             nameCell.classList.add('editable');
             nameCell.setAttribute('data-variable-name', variable.name || 'unnamed');
             nameCell.title = 'Click to rename variable';
@@ -258,46 +241,16 @@ export function renameVariable(oldName, newName) {
             `;
             row.firstElementChild.replaceWith(nameCell);
             variablesTable.appendChild(row);
+            
+            // IMPORTANT: Make the name cell editable by attaching click handler
+            makeVariableEditable(nameCell, variable.name || 'unnamed');
           });
-          
-          // Add click listeners to cells after table rebuild
-          setTimeout(() => {
-            const cells = variablesTable.querySelectorAll('.editable');
-            cells.forEach(cell => {
-              if (!cell.hasClickListener) {
-                makeVariableEditable(cell, cell.textContent);
-                cell.hasClickListener = true;
-              }
-            });
-          }, 0);
         }
       }
     }
   });
   
-  // Update variables table - THIS MUST BE INSIDE A SUCCESS FLOW
-  const variablesTable = document.querySelector('#variables-table tbody');
-  if (variablesTable && state.currentFunction.local_variables) {
-    variablesTable.innerHTML = '';
-    
-    state.currentFunction.local_variables.forEach(variable => {
-      const row = document.createElement('tr');
-      const nameCell = document.createElement('td');
-      nameCell.textContent = variable.name || 'unnamed';
-      makeVariableEditable(nameCell, variable.name || 'unnamed');
-      
-      row.innerHTML = `
-        <td></td>
-        <td>${variable.type || 'unknown'}</td>
-        <td>${variable.size || 'N/A'}</td>
-        <td>${variable.offset || 'N/A'}</td>
-      `;
-      row.firstElementChild.replaceWith(nameCell);
-      variablesTable.appendChild(row);
-    });
-  }
-  
-  return { success: true }; // Explicitly return success object
+  return true;
 }
 
 /**
@@ -389,7 +342,7 @@ export function makeVariableEditable(element, variableName) {
     // Store reference to blur handler so we can remove it
     let blurHandler = null;
     
-    const completeEdit = (name) => {
+    const completeEdit = async (name) => {
       if (alreadyHandled) return;
       alreadyHandled = true;
       
@@ -403,7 +356,7 @@ export function makeVariableEditable(element, variableName) {
         // Attempt the rename
         try {
           console.log(`Calling renameVariable with: "${originalName}" -> "${name}"`);
-          const success = renameVariable(originalName, name);
+          const success = await renameVariable(originalName, name);
           console.log(`renameVariable returned: ${success}`);
           
           if (success === false) {
@@ -437,11 +390,14 @@ export function makeVariableEditable(element, variableName) {
               console.log("Re-added blur listener");
             }, 50); // Slightly longer delay
           } else {
-            // Success - remove the input
-            console.log("Validation succeeded, removing input");
+            // Success - remove the input and restore the variable name
+            console.log("Validation succeeded, removing input and restoring variable name");
             if (input.parentNode) {
               input.parentNode.removeChild(input);
             }
+            // Restore the variable name text with the new name
+            element.textContent = name;
+            element.setAttribute('data-variable-name', name);
           }
         } catch (error) {
           console.error("Error during rename:", error);

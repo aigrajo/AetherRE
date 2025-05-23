@@ -1,5 +1,6 @@
 import { state } from './core.js';
 import { recordAction } from './historyManager.js';
+import { apiService } from './apiService.js';
 
 // Global flag to track focus issues
 let focusIssueDetected = false;
@@ -56,72 +57,69 @@ window.restoreFocus = function() {
 };
 
 // Function to rename a function
-export function renameFunction(oldName, newName) {
+export async function renameFunction(oldName, newName) {
   if (!state.currentFunction || !oldName || !newName || oldName === newName) return false;
   
   console.log(`Attempting to rename function from "${oldName}" to "${newName}"`);
   
-  // Validate the new name format - only allow alphanumeric and underscore
-  const validNamePattern = /^[a-zA-Z0-9_]+$/;
-  if (!validNamePattern.test(newName)) {
-    console.error(`Cannot rename to "${newName}" - only alphanumeric characters and underscores are allowed`);
-    window.showErrorModal(`Invalid name: "${newName}" - only letters, numbers, and underscores are allowed.`);
-    return false;
-  }
-  
-  // Don't allow names starting with a number
-  if (/^[0-9]/.test(newName)) {
-    console.error(`Cannot rename to "${newName}" - names cannot start with a number`);
-    window.showErrorModal(`Invalid name: "${newName}" - names cannot start with a number.`);
-    return false;
-  }
-  
-  // Check if the new name exists anywhere in the pseudocode
-  if (state.currentFunction && state.currentFunction.pseudocode) {
-    const pseudocode = state.currentFunction.pseudocode;
+  // Use backend validation instead of frontend validation
+  return await validateAndRenameFunction(oldName, newName);
+}
+
+// New function to validate and rename using backend service
+async function validateAndRenameFunction(oldName, newName) {
+  try {
+    // Ensure we have valid current function data
+    if (!state.currentFunction) {
+      throw new Error("No current function selected");
+    }
     
-    // Do a simple check for the existence of the new name in pseudocode
-    if (pseudocode.indexOf(newName) >= 0) {
-      console.error(`Cannot rename to "${newName}" - this name exists as part of other identifiers in the pseudocode`);
-      window.showErrorModal(`Cannot rename to "${newName}" - this name exists as part of other identifiers in the pseudocode and would cause conflicts.`);
+    // Use address as the function identifier (functions have 'address', not 'id')
+    const functionId = state.currentFunction.address || state.currentFunction.id;
+    if (!functionId) {
+      throw new Error("Current function has no address or ID");
+    }
+    
+    console.log(`Current function ID/Address: ${functionId}`);
+    console.log(`Functions data available:`, !!state.functionsData);
+    console.log(`Functions data keys:`, state.functionsData ? Object.keys(state.functionsData) : 'None');
+    
+    // Call backend validation service using our API service
+    const validationResult = await apiService.validateFunctionName(
+      oldName,
+      newName,
+      state.functionsData || {},
+      functionId,
+      state.currentFunction.pseudocode
+    );
+    
+    if (!validationResult.is_valid) {
+      console.error(`Cannot rename to "${newName}": ${validationResult.error_message}`);
+      window.showErrorModal(validationResult.error_message);
       return false;
     }
     
-    // Expanded list of C language keywords - case insensitive check
-    const cKeywords = [
-      'auto', 'break', 'case', 'char', 'const', 'continue', 'default', 'do', 
-      'double', 'else', 'enum', 'extern', 'float', 'for', 'goto', 'if', 
-      'int', 'long', 'register', 'return', 'short', 'signed', 'sizeof', 
-      'static', 'struct', 'switch', 'typedef', 'union', 'unsigned', 'void', 
-      'volatile', 'while'
-    ];
+    // Validation passed, perform the rename
+    return performFunctionRename(oldName, newName);
     
-    if (cKeywords.some(keyword => keyword.toLowerCase() === newName.toLowerCase())) {
-      console.error(`Cannot rename to "${newName}" - this is a reserved keyword`);
-      window.showErrorModal(`Cannot rename to "${newName}" - this is a reserved C keyword and would cause conflicts.`);
-      return false;
-    }
-    
-    // Check for function name conflicts
-    if (state.functionsData && state.functionsData.functions) {
-      const existingFunc = state.functionsData.functions.find(f => 
-        f.name === newName && f.id !== state.currentFunction.id
-      );
-      if (existingFunc) {
-        console.error(`Cannot rename to "${newName}" - a function with this name already exists`);
-        window.showErrorModal(`Cannot rename to "${newName}" - a function with this name already exists in this program.`);
-        return false;
-      }
-    }
+  } catch (error) {
+    console.error('Error during validation:', error);
+    window.showErrorModal(`Validation failed: ${error.message}`);
+    return false;
   }
+}
+
+// Function to perform the actual rename after validation passes
+function performFunctionRename(oldName, newName) {
+  console.log(`Performing function rename from "${oldName}" to "${newName}"`);
   
-  // All validation passed, now actually perform the rename
-  console.log(`Renaming function from "${oldName}" to "${newName}"`);
+  // Get the function identifier (use address as primary, fallback to id)
+  const functionId = state.currentFunction.address || state.currentFunction.id;
   
   // Store old state for history
   const oldState = {
     name: oldName,
-    functionId: state.currentFunction.id,
+    functionId: functionId,
     pseudocode: state.currentFunction.pseudocode,
     functionsData: state.functionsData ? JSON.parse(JSON.stringify(state.functionsData)) : null
   };
@@ -170,13 +168,21 @@ export function renameFunction(oldName, newName) {
   // Store new state for history
   const newState = {
     name: newName,
-    functionId: state.currentFunction.id,
+    functionId: functionId,
     pseudocode: state.currentFunction.pseudocode,
     functionsData: state.functionsData ? JSON.parse(JSON.stringify(state.functionsData)) : null
   };
   
   // Log whether pseudocode was updated
   console.log(`Pseudocode updated: ${updatedPseudocode}, old length: ${oldState.pseudocode.length}, new length: ${newState.pseudocode.length}`);
+  
+  // IMPORTANT: Update function name display after function rename
+  const functionNameEl = document.getElementById('function-name');
+  if (functionNameEl && state.currentFunction.name) {
+    functionNameEl.textContent = state.currentFunction.name;
+    functionNameEl.setAttribute('data-function-name', state.currentFunction.name);
+    console.log(`Updated function name display to: ${state.currentFunction.name}`);
+  }
   
   // Record action for undo/redo
   recordAction({
@@ -186,8 +192,9 @@ export function renameFunction(oldName, newName) {
     undo: () => {
       console.log(`Undoing rename of function from "${newName}" to "${oldState.name}"`);
       
-      // Only perform undo if we're still on the same function
-      if (state.currentFunction && state.currentFunction.id === oldState.functionId) {
+      // Check if we're still on the same function (use address/id)
+      const currentFunctionId = state.currentFunction?.address || state.currentFunction?.id;
+      if (state.currentFunction && currentFunctionId === oldState.functionId) {
         // 1. Restore the old function name
         state.currentFunction.name = oldState.name;
         
@@ -200,36 +207,31 @@ export function renameFunction(oldName, newName) {
           }
         }
         
-        // 3. Restore pseudocode - IMPORTANT: use the stored pseudocode rather than trying to do a replace
+        // 3. Restore pseudocode
         state.currentFunction.pseudocode = oldState.pseudocode;
         
-        // 4. Update Monaco editor immediately with the old pseudocode
+        // 4. Update Monaco editor immediately
         if (window.updateMonacoEditorContent) {
           window.updateMonacoEditorContent(oldState.pseudocode);
         } else {
           updateMonacoEditorContent(oldState.pseudocode);
         }
         
-        // 5. Update function name in UI
+        // 5. Update function name element if it exists
         const functionNameEl = document.getElementById('function-name');
         if (functionNameEl) {
           functionNameEl.textContent = oldState.name;
-          // Important: need to update the editable state but without recursion
           functionNameEl.setAttribute('data-function-name', oldState.name);
-        }
-        
-        // 6. Update function list
-        if (window.renderFunctionList && state.functionsData && state.functionsData.functions) {
-          window.renderFunctionList(state.functionsData.functions);
         }
       }
     },
     redo: () => {
       console.log(`Redoing rename of function from "${oldState.name}" to "${newName}"`);
       
-      // Only perform redo if we're still on the same function
-      if (state.currentFunction && state.currentFunction.id === newState.functionId) {
-        // 1. Restore the new function name
+      // Check if we're still on the same function (use address/id)
+      const currentFunctionId = state.currentFunction?.address || state.currentFunction?.id;
+      if (state.currentFunction && currentFunctionId === newState.functionId) {
+        // 1. Apply the new function name
         state.currentFunction.name = newState.name;
         
         // 2. Restore functions data if available
@@ -241,46 +243,27 @@ export function renameFunction(oldName, newName) {
           }
         }
         
-        // 3. Restore pseudocode - IMPORTANT: use the stored pseudocode rather than trying to do a replace
+        // 3. Restore pseudocode
         state.currentFunction.pseudocode = newState.pseudocode;
         
-        // 4. Update Monaco editor immediately with the new pseudocode
+        // 4. Update Monaco editor immediately
         if (window.updateMonacoEditorContent) {
           window.updateMonacoEditorContent(newState.pseudocode);
         } else {
           updateMonacoEditorContent(newState.pseudocode);
         }
         
-        // 5. Update function name in UI
+        // 5. Update function name element if it exists
         const functionNameEl = document.getElementById('function-name');
         if (functionNameEl) {
           functionNameEl.textContent = newState.name;
-          // Important: need to update the editable state but without recursion
           functionNameEl.setAttribute('data-function-name', newState.name);
-        }
-        
-        // 6. Update function list
-        if (window.renderFunctionList && state.functionsData && state.functionsData.functions) {
-          window.renderFunctionList(state.functionsData.functions);
         }
       }
     }
   });
   
-  // Update UI - THIS MUST BE INSIDE A SUCCESS FLOW
-  const functionNameEl = document.getElementById('function-name');
-  if (functionNameEl) {
-    functionNameEl.textContent = newName;
-    // When we successfully rename, update the editable state with the new name
-    makeFunctionNameEditable(functionNameEl, newName);
-  }
-  
-  // Update function list
-  if (window.renderFunctionList && state.functionsData && state.functionsData.functions) {
-    window.renderFunctionList(state.functionsData.functions);
-  }
-  
-  return { success: true }; // Explicitly return success object
+  return true;
 }
 
 /**
@@ -362,7 +345,7 @@ export function makeFunctionNameEditable(element, functionName) {
     // Use a shared flag stored on the element to prevent conflicts
     element._editInProgress = false;
     
-    const completeEdit = (name) => {
+    const completeEdit = async (name) => {
       if (element._editInProgress) return;
       element._editInProgress = true;
       
@@ -370,7 +353,7 @@ export function makeFunctionNameEditable(element, functionName) {
         // Attempt the rename
         try {
           console.log(`Calling renameFunction with: "${originalName}" -> "${name}"`);
-          const success = renameFunction(originalName, name);
+          const success = await renameFunction(originalName, name);
           console.log(`renameFunction returned: ${success}`);
           
           if (success === false) {
@@ -400,11 +383,14 @@ export function makeFunctionNameEditable(element, functionName) {
             
             return; // Exit early to prevent further processing
           } else {
-            // Success - remove the input
-            console.log("Validation succeeded, removing input");
+            // Success - remove the input and restore the function name
+            console.log("Validation succeeded, removing input and restoring function name");
             if (input.parentNode) {
               input.parentNode.removeChild(input);
             }
+            // Restore the function name text with the new name
+            element.textContent = name;
+            element.setAttribute('data-function-name', name);
             element._editInProgress = false;
           }
         } catch (error) {
