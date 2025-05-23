@@ -211,6 +211,15 @@ contextBridge.exposeInMainWorld('api', {
     });
   },
   
+  // Auto-load communication
+  onAutoAnalyzeBinary: (callback) => {
+    console.log('Setting up auto-analyze binary listener in preload...');
+    ipcRenderer.on('auto-analyze-binary', (event, binaryPath) => {
+      console.log('Auto-analyze binary event received in preload:', binaryPath);
+      callback(binaryPath);
+    });
+  },
+  
   // File dialog APIs
   showBinaryDialog: () => ipcRenderer.invoke('show-binary-dialog'),
   showProjectLoadDialog: () => ipcRenderer.invoke('show-project-load-dialog'),

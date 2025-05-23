@@ -226,6 +226,28 @@ ipcMain.handle('enable-project-menu', (event, enabled) => {
 app.whenReady().then(() => {
   createWindow();
 
+  // Parse command line arguments for binary loading
+  const args = process.argv.slice(2);
+  let binaryPath = null;
+  
+  for (let i = 0; i < args.length; i++) {
+    if (args[i].startsWith('--binary=')) {
+      binaryPath = args[i].substring('--binary='.length).replace(/^"(.*)"$/, '$1');
+      break;
+    }
+  }
+  
+  // If binary path is specified, send it to the renderer after DOM is ready
+  if (binaryPath && fs.existsSync(binaryPath)) {
+    console.log('Auto-loading binary for analysis:', binaryPath);
+    mainWindow.webContents.once('dom-ready', () => {
+      // Wait a bit for the renderer to be fully ready
+      setTimeout(() => {
+        mainWindow.webContents.send('auto-analyze-binary', binaryPath);
+      }, 1000);
+    });
+  }
+
   app.on('activate', () => {
     // On macOS it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open

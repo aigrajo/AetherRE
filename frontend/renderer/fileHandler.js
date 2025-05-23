@@ -339,7 +339,7 @@ async function cleanupOldMetadata(binaryName) {
 /**
  * Process a selected file (shared logic for menu and file input)
  */
-async function processSelectedFile(filePath, filename, isBinary) {
+export async function processSelectedFile(filePath, filename, isBinary) {
   const progressContainer = document.getElementById('analysis-progress');
   const progressFill = document.querySelector('.progress-fill');
   const progressText = document.querySelector('.progress-text');

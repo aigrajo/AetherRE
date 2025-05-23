@@ -18,47 +18,58 @@ if not exist venv (
     exit /b 1
 )
 
-:: Check for the command line argument (binary file)
-IF "%1"=="" (
-    echo [*] No binary file specified. Starting GUI only...
-) ELSE (
-    :: Verify file exists
-    IF NOT EXIST "%1" (
-        echo [!] Error: Binary file not found: %1
-        pause
-        exit /b 1
-    )
-    
-    :: Run headless analysis
-    echo [*] Running analysis on: %1
-    echo [*] This may take a while depending on the size of the binary...
-    
-    :: Create a project name from the binary name
-    for %%I in ("%1") do (
-        SET BINARY_NAME=%%~nI
-    )
-    
-    call "%PROJECT_ROOT%scripts\run_ghidra_headless.bat" "%TEMP_DIR%" "!BINARY_NAME!" "%1"
-    
-    IF NOT !ERRORLEVEL! == 0 (
-        echo [!] Analysis failed. Please check the error messages above.
-        echo [*] Starting GUI anyway...
-    ) ELSE (
-        echo [+] Analysis complete! Results saved to data directory.
-    )
+:: Parse command line arguments
+set "BINARY_PATH="
+set "PROJECT_NAME="
+
+:parse_args
+if "%~1"=="" goto :end_parse_args
+if /i "%~1"=="-binary" (
+    set "BINARY_PATH=%~2"
+    shift
+    shift
+    goto :parse_args
 )
+if /i "%~1"=="-project" (
+    set "PROJECT_NAME=%~2"
+    shift
+    shift
+    goto :parse_args
+)
+:: If it's not a flag and no binary specified yet, treat as binary path
+if not defined BINARY_PATH (
+    set "BINARY_PATH=%~1"
+)
+shift
+goto :parse_args
+:end_parse_args
 
 :: Start the FastAPI server in a new window with activated venv
 echo [*] Starting backend server...
 start "AetherRE Backend" cmd /c "cd /d %PROJECT_ROOT% && call venv\Scripts\activate.bat && %PROJECT_ROOT%venv\Scripts\python.exe %PROJECT_ROOT%backend\main.py --server"
 
 :: Wait a moment for the server to start
-timeout /t 2 /nobreak >nul
+timeout /t 3 /nobreak >nul
 
-:: Start the GUI
-echo [*] Starting AetherRE GUI...
-cd "%PROJECT_ROOT%"
-start cmd /c "npm start"
+:: Check if binary path was provided
+IF defined BINARY_PATH (
+    :: Verify file exists
+    IF NOT EXIST "!BINARY_PATH!" (
+        echo [!] Error: Binary file not found: !BINARY_PATH!
+        echo Usage: %~nx0 [-binary] ^<path_to_binary^> [-project ^<project_name^>]
+        pause
+        exit /b 1
+    )
+    
+    echo [*] Starting AetherRE GUI with binary: !BINARY_PATH!
+    cd "%PROJECT_ROOT%"
+    :: Start the GUI with the binary file as argument
+    start cmd /c "npm start -- --binary=\"!BINARY_PATH!\""
+) ELSE (
+    echo [*] Starting AetherRE GUI...
+    cd "%PROJECT_ROOT%"
+    start cmd /c "npm start"
+)
 
 :: Cleanup on exit
 echo [*] Press Ctrl+C to exit and clean up processes...

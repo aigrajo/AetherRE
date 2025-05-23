@@ -20,6 +20,43 @@ console.log('Initializing core module...');
 coreInit();
 exposeGlobals();
 
+// Handle auto-loading of binary files for analysis
+function setupAutoLoad() {
+  if (window.api && window.api.onAutoAnalyzeBinary) {
+    window.api.onAutoAnalyzeBinary(async (binaryPath) => {
+      console.log('Auto-analyzing binary:', binaryPath);
+      try {
+        // Import the processSelectedFile function from fileHandler
+        const { processSelectedFile } = await import('./fileHandler.js');
+        
+        const filename = binaryPath.split(/[\\/]/).pop();
+        await processSelectedFile(binaryPath, filename, true); // true = it's a binary (not JSON)
+        
+        console.log('Auto-analysis initiated for:', filename);
+        
+        // Show info notification
+        const notification = document.createElement('div');
+        notification.className = 'notification info';
+        notification.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #2196F3; color: white; padding: 12px 24px; border-radius: 4px; z-index: 10000; font-size: 14px;';
+        notification.textContent = `Analyzing binary: ${filename}`;
+        document.body.appendChild(notification);
+        setTimeout(() => notification.remove(), 3000);
+        
+      } catch (error) {
+        console.error('Error auto-analyzing binary:', error);
+        
+        // Show error notification
+        const notification = document.createElement('div');
+        notification.className = 'notification error';
+        notification.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #f44336; color: white; padding: 12px 24px; border-radius: 4px; z-index: 10000; font-size: 14px;';
+        notification.textContent = `Failed to analyze: ${error.message}`;
+        document.body.appendChild(notification);
+        setTimeout(() => notification.remove(), 5000);
+      }
+    });
+  }
+}
+
 // Initialize all modules
 async function initApp() {
   console.log('Starting full initialization...');
@@ -31,6 +68,10 @@ async function initApp() {
   // Initialize file handling
   console.log('Initializing file handling...');
   initFileHandling();
+  
+  // Setup auto-load handling
+  console.log('Setting up auto-load...');
+  setupAutoLoad();
   
   // Check recent analyses
   console.log('Checking recent analyses...');
