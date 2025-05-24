@@ -90,9 +90,9 @@ class TagService:
             function_tags = all_tags.get(function_id, [])
             
             # Ensure all tags have required properties
-            for tag in function_tags:
+            for idx, tag in enumerate(function_tags):
                 if not tag.get('color'):
-                    tag['color'] = TAG_COLORS[0]  # Default color
+                    tag['color'] = TAG_COLORS[idx % len(TAG_COLORS)]  # Assign color based on index
                 if 'includeInAI' not in tag:
                     tag['includeInAI'] = True  # Default to true
             
@@ -113,6 +113,12 @@ class TagService:
         tags_file = self.data_dir / f"{binary}_function_tags.json"
         
         try:
+            # Ensure all tags have required properties before saving
+            for idx, tag in enumerate(tags):
+                if not tag.get('color'):
+                    tag['color'] = TAG_COLORS[idx % len(TAG_COLORS)]
+                if 'includeInAI' not in tag:
+                    tag['includeInAI'] = True
             # Load existing tags or create new if file doesn't exist
             all_tags = {}
             if tags_file.exists():
@@ -160,6 +166,10 @@ class TagService:
         # Assign color if not provided
         if not color:
             color = TAG_COLORS[len(existing_tags) % len(TAG_COLORS)]
+        
+        # Ensure includeInAI is set
+        if include_in_ai is None:
+            include_in_ai = True
         
         # Create new tag
         new_tag = {

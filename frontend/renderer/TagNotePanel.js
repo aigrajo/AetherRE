@@ -208,7 +208,7 @@ async function dispatchLoadData() {
     });
     return;
   }
-  
+
   // Use backend service to clean binary name to ensure consistency with getCurrentContext
   let cleanBinaryName = null;
   try {
@@ -217,17 +217,25 @@ async function dispatchLoadData() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ binary_name: currentBinary })
     });
-    
+
     if (response.ok) {
       const result = await response.json();
       cleanBinaryName = result.sanitized_name;
     } else {
-      console.warn('Failed to sanitize binary name, using fallback');
-      cleanBinaryName = currentBinary.replace(/[^\w\d]/g, '_');
+      console.error('TagNotePanel: Failed to sanitize binary name from backend. Status:', response.status);
+      // cleanBinaryName remains null
     }
   } catch (error) {
-    console.warn('Error sanitizing binary name:', error);
-    cleanBinaryName = currentBinary.replace(/[^\w\d]/g, '_');
+    console.error('TagNotePanel: Error calling sanitize binary name API:', error);
+    // cleanBinaryName remains null
+  }
+
+  if (!cleanBinaryName) {
+    console.error('TagNotePanel: Cannot proceed without a sanitized binary name. Aborting load data.');
+    // Optionally, dispatch events to clear UI or show an error message
+    document.dispatchEvent(new CustomEvent('clear-note'));
+    document.dispatchEvent(new CustomEvent('clear-tags'));
+    return;
   }
 
   console.log(`TagNotePanel: Dispatching load events for ${cleanBinaryName}/${currentFunctionId}`);
@@ -272,12 +280,12 @@ export async function getCurrentContext() {
         const result = await response.json();
         cleanBinaryName = result.sanitized_name;
       } else {
-        console.warn('Failed to sanitize binary name, using fallback');
-        cleanBinaryName = currentBinary;
+        console.warn('TagNotePanel: Failed to sanitize binary name from backend for getCurrentContext. Status:', response.status);
+        // cleanBinaryName remains null
       }
     } catch (error) {
-      console.warn('Error sanitizing binary name:', error);
-      cleanBinaryName = currentBinary;
+      console.warn('TagNotePanel: Error calling sanitize binary name API for getCurrentContext:', error);
+      // cleanBinaryName remains null
     }
   }
   

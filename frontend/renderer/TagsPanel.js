@@ -31,25 +31,10 @@ export async function initTagsPanel() {
     setupEventListeners();
   } catch (error) {
     console.error('Failed to initialize tags panel:', error);
-    // Fallback to default values if backend is unavailable
-    TAG_TYPES = {
-      Behavioral: {
-        description: "Describes what the function does",
-        examples: ["decryptor", "c2_handler", "keygen", "network_comm"]
-      },
-      Structural: {
-        description: "Describes how the function fits into the program architecture",
-        examples: ["entrypoint", "syscall_wrapper", "helper_function"]
-      },
-      Workflow: {
-        description: "Describes the analyst's workflow state",
-        examples: ["needs_review", "stumped", "false_positive", "suspicious"]
-      }
-    };
-    TAG_COLORS = ["#20D709", "#0000FF", "#E91E63", "#FF4500", "#9C27B0", "#FFD500", "#FF0000", "#009688", "#8BC34A"];
-    
-    setupTagsPanel();
-    setupEventListeners();
+    // Fallback logic for TAG_TYPES and TAG_COLORS has been removed.
+    // The panel might not be fully functional if these are not loaded.
+    setupTagsPanel(); // Attempt to setup panel, may be partially initialized
+    setupEventListeners(); // Setup listeners regardless
   }
 }
 
@@ -289,12 +274,8 @@ async function handleLoadTags(event) {
     // Update state
     currentTags = response.tags || [];
     
-    // Ensure all tags have colors
-    currentTags.forEach(tag => {
-      if (!tag.color) {
-        tag.color = TAG_COLORS[Math.floor(Math.random() * TAG_COLORS.length)];
-      }
-    });
+    // Removed frontend logic for assigning default colors.
+    // Backend is now expected to provide colors for all tags.
     
     // Render tags
     renderTags();
@@ -449,15 +430,8 @@ export function getCurrentTags() {
 export function setCurrentTags(tags) {
   currentTags = tags || [];
   
-  // Ensure all tags have required properties
-  currentTags.forEach(tag => {
-    if (!tag.color) {
-      tag.color = TAG_COLORS[Math.floor(Math.random() * TAG_COLORS.length)];
-    }
-    if (tag.includeInAI === undefined) {
-      tag.includeInAI = true;
-    }
-  });
+  // Removed frontend logic for assigning default colors and includeInAI status.
+  // Backend/project file is now expected to provide these for all tags.
   
   // Re-render the tags display
   renderTags();
@@ -560,12 +534,8 @@ async function loadCurrentTags() {
     const response = await apiService.getTags(context.binaryName, context.functionId);
     currentTags = response.tags || [];
     
-    // Ensure all tags have colors
-    currentTags.forEach(tag => {
-      if (!tag.color) {
-        tag.color = TAG_COLORS[Math.floor(Math.random() * TAG_COLORS.length)];
-      }
-    });
+    // Removed frontend logic for assigning default colors.
+    // Backend is now expected to provide colors for all tags.
     
     renderTags();
   } catch (error) {
