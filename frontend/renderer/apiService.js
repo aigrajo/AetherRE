@@ -296,6 +296,98 @@ export class ApiService {
             })
         });
     }
+
+    // Function Operations API calls
+    async renameFunction(oldName, newName, currentFunction, functionsData, sessionId = null) {
+        const headers = {
+            'Content-Type': 'application/json',
+        };
+        
+        if (sessionId) {
+            headers['x-session-id'] = sessionId;
+        }
+        
+        return this.request('/api/functions/rename', {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify({
+                old_name: oldName,
+                new_name: newName,
+                current_function: currentFunction,
+                functions_data: functionsData
+            })
+        });
+    }
+
+    async getFunctionHistory(sessionId) {
+        return this.request('/api/functions/history', {
+            method: 'POST',
+            body: JSON.stringify({
+                session_id: sessionId
+            })
+        });
+    }
+
+    async undoFunctionOperation(sessionId, operationId) {
+        return this.request('/api/functions/undo', {
+            method: 'POST',
+            body: JSON.stringify({
+                session_id: sessionId,
+                operation_id: operationId
+            })
+        });
+    }
+
+    async redoFunctionOperation(sessionId, operationId) {
+        return this.request('/api/functions/redo', {
+            method: 'POST',
+            body: JSON.stringify({
+                session_id: sessionId,
+                operation_id: operationId
+            })
+        });
+    }
+
+    // Variable Operations API calls (mirrors function operations)
+    async renameVariable(oldName, newName, currentFunction, sessionId = null) {
+        const headers = {
+            'Content-Type': 'application/json',
+        };
+        
+        if (sessionId) {
+            headers['x-session-id'] = sessionId;
+        }
+        
+        return this.request('/api/functions/rename-variable', {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify({
+                old_name: oldName,
+                new_name: newName,
+                current_function: currentFunction
+            })
+        });
+    }
+
+    async undoVariableOperation(sessionId, operationId) {
+        return this.request('/api/functions/undo', {
+            method: 'POST',
+            body: JSON.stringify({
+                session_id: sessionId,
+                operation_id: operationId
+            })
+        });
+    }
+
+    async redoVariableOperation(sessionId, operationId) {
+        return this.request('/api/functions/redo', {
+            method: 'POST',
+            body: JSON.stringify({
+                session_id: sessionId,
+                operation_id: operationId
+            })
+        });
+    }
 }
 
 // Create and export singleton instance

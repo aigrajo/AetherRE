@@ -5,6 +5,13 @@ import { apiService } from './apiService.js';
 // Global flag to track focus issues
 let focusIssueDetected = false;
 
+// Generate a simple session ID for history tracking
+let sessionId = generateSessionId();
+
+function generateSessionId() {
+  return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
 // Function to detect and fix focus issues
 function detectAndFixFocusIssues() {
   console.log("Focus debugging:");
@@ -56,218 +63,139 @@ window.restoreFocus = function() {
   setTimeout(() => document.body.click(), 10);
 };
 
-// Function to rename a function
+// Simplified function to rename a function using comprehensive backend service
 export async function renameFunction(oldName, newName) {
   if (!state.currentFunction || !oldName || !newName || oldName === newName) return false;
   
   console.log(`Attempting to rename function from "${oldName}" to "${newName}"`);
   
-  // Use enhanced backend validation
-  return await validateAndRenameFunction(oldName, newName);
-}
-
-// Enhanced function to validate and rename using backend service
-async function validateAndRenameFunction(oldName, newName) {
   try {
-    // Ensure we have valid current function data
-    if (!state.currentFunction) {
-      throw new Error("No current function selected");
-    }
-    
-    // Use address as the function identifier (functions have 'address', not 'id')
-    const functionId = state.currentFunction.address || state.currentFunction.id;
-    if (!functionId) {
-      throw new Error("Current function has no address or ID");
-    }
-    
-    console.log(`Current function ID/Address: ${functionId}`);
-    console.log(`Functions data available:`, !!state.functionsData);
-    console.log(`Functions data keys:`, state.functionsData ? Object.keys(state.functionsData) : 'None');
-    
-    // Call enhanced backend validation service
-    const validationResult = await apiService.validateFunctionName(
+    // Call comprehensive backend service
+    const result = await apiService.renameFunction(
       oldName,
       newName,
+      state.currentFunction,
       state.functionsData || {},
-      functionId,
-      state.currentFunction.pseudocode
+      sessionId
     );
     
-    if (!validationResult.is_valid) {
-      console.error(`Cannot rename to "${newName}": ${validationResult.error_message}`);
-      window.showErrorModal(validationResult.error_message);
+    if (!result.success) {
+      console.error(`Cannot rename to "${newName}": ${result.error}`);
+      window.showErrorModal(result.error);
       return false;
     }
     
-    console.log('Backend validation passed, performing rename...');
+    console.log('Backend rename completed successfully');
     
-    // Validation passed, perform the rename
-    return performFunctionRename(oldName, newName);
+    // Apply the updates returned from backend
+    updateStateFromBackendResult(result);
+    
+    // Record action for local history (simplified)
+    recordSimpleAction(oldName, newName, result.operation_id);
+    
+    return true;
     
   } catch (error) {
-    console.error('Error during validation:', error);
-    window.showErrorModal(`Validation failed: ${error.message}`);
+    console.error('Error during function rename:', error);
+    window.showErrorModal(`Rename failed: ${error.message}`);
     return false;
   }
 }
 
-// Function to perform the actual rename after validation passes
-function performFunctionRename(oldName, newName) {
-  console.log(`Performing function rename from "${oldName}" to "${newName}"`);
+// Apply backend updates to frontend state
+function updateStateFromBackendResult(result) {
+  console.log('Applying backend updates to frontend state');
   
-  // Get the function identifier (use address as primary, fallback to id)
-  const functionId = state.currentFunction.address || state.currentFunction.id;
-  
-  // Store old state for history
-  const oldState = {
-    name: oldName,
-    functionId: functionId,
-    pseudocode: state.currentFunction.pseudocode,
-    functionsData: state.functionsData ? JSON.parse(JSON.stringify(state.functionsData)) : null
-  };
-  
-  // Update the function name in current function
-  state.currentFunction.name = newName;
-  
-  // Update in functions list if available
-  if (state.functionsData && state.functionsData.functions) {
-    const func = state.functionsData.functions.find(f => f.name === oldName);
-    if (func) {
-      // Set originalName for tracking if not already set
-      if (!func.originalName) {
-        func.originalName = oldName;
-      }
-      func.name = newName;
-    }
+  // Update current function with backend result
+  if (result.updated_current_function) {
+    state.currentFunction = result.updated_current_function;
+    console.log(`Updated current function name to: ${state.currentFunction.name}`);
   }
   
-  // Also ensure current function has originalName tracking
-  if (!state.currentFunction.originalName) {
-    state.currentFunction.originalName = oldName;
+  // Update functions data with backend result
+  if (result.updated_functions_data) {
+    state.functionsData = result.updated_functions_data;
+    console.log('Updated functions data from backend');
   }
   
-  // Update in pseudocode - CRITICAL PATH
-  let updatedPseudocode = false;
+  // Update Monaco editor with new pseudocode
   if (state.currentFunction.pseudocode) {
-    try {
-      // Create a regex that matches the function name as a whole word
-      const regex = new RegExp(`\\b${oldName}\\b`, 'g');
-      const newPseudocode = state.currentFunction.pseudocode.replace(regex, newName);
-      
-      // Only update if changes were actually made
-      if (newPseudocode !== state.currentFunction.pseudocode) {
-        state.currentFunction.pseudocode = newPseudocode;
-        updatedPseudocode = true;
-        console.log(`Updated pseudocode with new function name "${newName}"`);
-      } else {
-        console.log(`No matches found for "${oldName}" in pseudocode, using exact replacement`);
-        // Fallback to direct string replacement if regex didn't match
-        state.currentFunction.pseudocode = state.currentFunction.pseudocode.split(oldName).join(newName);
-      }
-      
-      // Update Monaco editor immediately
-      if (window.updateMonacoEditorContent) {
-        window.updateMonacoEditorContent(state.currentFunction.pseudocode);
-      } else {
-        updateMonacoEditorContent(state.currentFunction.pseudocode);
-      }
-    } catch (error) {
-      console.error(`Error updating pseudocode:`, error);
-    }
+    updateMonacoEditorContent(state.currentFunction.pseudocode);
   }
   
-  // Store new state for history
-  const newState = {
-    name: newName,
-    functionId: functionId,
-    pseudocode: state.currentFunction.pseudocode,
-    functionsData: state.functionsData ? JSON.parse(JSON.stringify(state.functionsData)) : null
-  };
-  
-  // Log whether pseudocode was updated
-  console.log(`Pseudocode updated: ${updatedPseudocode}, old length: ${oldState.pseudocode.length}, new length: ${newState.pseudocode.length}`);
-  
-  // IMPORTANT: Update function name display after function rename
+  // Update function name display
   const functionNameEl = document.getElementById('function-name');
   if (functionNameEl && state.currentFunction.name) {
     functionNameEl.textContent = state.currentFunction.name;
     functionNameEl.setAttribute('data-function-name', state.currentFunction.name);
     console.log(`Updated function name display to: ${state.currentFunction.name}`);
   }
-  
-  // Record action for undo/redo
+}
+
+// Simplified action recording for local undo/redo
+function recordSimpleAction(oldName, newName, operationId) {
   recordAction({
-    type: 'rename_function',
-    oldState,
-    newState,
-    undo: () => {
-      console.log(`Undoing rename of function from "${newName}" to "${oldState.name}"`);
-      
-      // Check if we're still on the same function (use address/id)
-      const currentFunctionId = state.currentFunction?.address || state.currentFunction?.id;
-      if (state.currentFunction && currentFunctionId === oldState.functionId) {
-        // 1. Restore the old function name
-        state.currentFunction.name = oldState.name;
-        
-        // 2. Restore functions data
-        if (oldState.functionsData) {
-          state.functionsData = JSON.parse(JSON.stringify(oldState.functionsData));
-        }
-        
-        // 3. Restore pseudocode - IMPORTANT: use the stored pseudocode
-        state.currentFunction.pseudocode = oldState.pseudocode;
-        
-        // 4. Update Monaco editor immediately with the old pseudocode
-        if (window.updateMonacoEditorContent) {
-          window.updateMonacoEditorContent(oldState.pseudocode);
+    type: 'rename_function_backend',
+    oldName,
+    newName,
+    operationId,
+    sessionId,
+    undo: async () => {
+      console.log(`Undoing backend function rename: "${newName}" -> "${oldName}"`);
+      try {
+        const result = await apiService.undoFunctionOperation(sessionId, operationId);
+        if (result.success && result.restored_state) {
+          applyRestoredState(result.restored_state);
         } else {
-          updateMonacoEditorContent(oldState.pseudocode);
+          console.error('Backend undo failed:', result.error);
+          window.showErrorModal('Undo failed: ' + (result.error || 'Unknown error'));
         }
-        
-        // 5. Update function name display
-        const functionNameEl = document.getElementById('function-name');
-        if (functionNameEl) {
-          functionNameEl.textContent = oldState.name;
-          functionNameEl.setAttribute('data-function-name', oldState.name);
-        }
+      } catch (error) {
+        console.error('Error during undo:', error);
+        window.showErrorModal('Undo failed: ' + error.message);
       }
     },
-    redo: () => {
-      console.log(`Redoing rename of function from "${oldState.name}" to "${newName}"`);
-      
-      // Check if we're still on the same function (use address/id)
-      const currentFunctionId = state.currentFunction?.address || state.currentFunction?.id;
-      if (state.currentFunction && currentFunctionId === newState.functionId) {
-        // 1. Apply the new function name
-        state.currentFunction.name = newState.name;
-        
-        // 2. Restore functions data with new name
-        if (newState.functionsData) {
-          state.functionsData = JSON.parse(JSON.stringify(newState.functionsData));
-        }
-        
-        // 3. Apply new pseudocode
-        state.currentFunction.pseudocode = newState.pseudocode;
-        
-        // 4. Update Monaco editor
-        if (window.updateMonacoEditorContent) {
-          window.updateMonacoEditorContent(newState.pseudocode);
+    redo: async () => {
+      console.log(`Redoing backend function rename: "${oldName}" -> "${newName}"`);
+      try {
+        const result = await apiService.redoFunctionOperation(sessionId, operationId);
+        if (result.success && result.restored_state) {
+          applyRestoredState(result.restored_state);
         } else {
-          updateMonacoEditorContent(newState.pseudocode);
+          console.error('Backend redo failed:', result.error);
+          window.showErrorModal('Redo failed: ' + (result.error || 'Unknown error'));
         }
-        
-        // 5. Update function name display
-        const functionNameEl = document.getElementById('function-name');
-        if (functionNameEl) {
-          functionNameEl.textContent = newState.name;
-          functionNameEl.setAttribute('data-function-name', newState.name);
-        }
+      } catch (error) {
+        console.error('Error during redo:', error);
+        window.showErrorModal('Redo failed: ' + error.message);
       }
     }
   });
+}
+
+// Apply restored state from backend undo/redo operations
+function applyRestoredState(restoredState) {
+  console.log('Applying restored state from backend');
   
-  console.log(`Function rename completed successfully: "${oldName}" -> "${newName}"`);
-  return true;
+  if (restoredState.current_function) {
+    state.currentFunction = restoredState.current_function;
+  }
+  
+  if (restoredState.functions_data) {
+    state.functionsData = restoredState.functions_data;
+  }
+  
+  // Update Monaco editor
+  if (state.currentFunction && state.currentFunction.pseudocode) {
+    updateMonacoEditorContent(state.currentFunction.pseudocode);
+  }
+  
+  // Update function name display
+  const functionNameEl = document.getElementById('function-name');
+  if (functionNameEl && state.currentFunction && state.currentFunction.name) {
+    functionNameEl.textContent = state.currentFunction.name;
+    functionNameEl.setAttribute('data-function-name', state.currentFunction.name);
+  }
 }
 
 /**
@@ -294,15 +222,14 @@ function updateMonacoEditorContent(content) {
   }
 }
 
-// Function to make a function name editable
+// Function to make a function name editable (simplified UI logic only)
 export function makeFunctionNameEditable(element, functionName) {
   // Always use the current function name from state if available
-  // This ensures we're working with the correct name after undo operations
   const currentName = state.currentFunction ? state.currentFunction.name : functionName;
   
   console.log(`Making function name editable: UI name=${functionName}, Current state name=${currentName}`);
   
-  // First, ensure we've cleaned up any stale inputs in document
+  // Clean up any existing inputs
   document.querySelectorAll('.function-rename-input, .variable-rename-input').forEach(el => {
     el.blur();
     if (el.parentNode) {
@@ -316,12 +243,11 @@ export function makeFunctionNameEditable(element, functionName) {
   element.title = 'Click to rename function';
   element.setAttribute('data-function-name', currentName);
   
-  // IMPORTANT: Clean up any existing handlers
+  // Clean up any existing handlers
   element.removeEventListener('click', element.renameClickHandler);
   
-  // New click handler properly scoped
+  // Simplified click handler
   element.renameClickHandler = function startEditMode(e) {
-    // If an event is provided, prevent default behavior
     if (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -332,7 +258,6 @@ export function makeFunctionNameEditable(element, functionName) {
       return;
     }
     
-    // Store original name
     const originalName = element.getAttribute('data-function-name') || element.textContent;
     console.log(`Starting edit for function name: ${originalName}`);
     
@@ -346,71 +271,56 @@ export function makeFunctionNameEditable(element, functionName) {
     element.innerHTML = '';
     element.appendChild(input);
     
-    // Use a shared flag stored on the element to prevent conflicts
-    element._editInProgress = false;
+    let editInProgress = false;
     
     const completeEdit = async (name) => {
-      if (element._editInProgress) return;
-      element._editInProgress = true;
+      if (editInProgress) return;
+      editInProgress = true;
       
       if (name && name !== originalName) {
-        // Attempt the rename
+        // Attempt the rename using simplified backend call
         try {
           console.log(`Calling renameFunction with: "${originalName}" -> "${name}"`);
           const success = await renameFunction(originalName, name);
-          console.log(`renameFunction returned: ${success}`);
           
           if (success === false) {
-            // Validation failed - need to recreate the input completely
+            // Validation failed - recreate input
             console.log("Validation failed, recreating input element");
             
-            // Remove the blur handler to prevent interference
             input.removeEventListener('blur', blurHandler);
             
-            // Remove the current input entirely
             if (input.parentNode) {
               input.parentNode.removeChild(input);
             }
             
-            // Reset the element to show the original name
             element.textContent = originalName;
+            editInProgress = false;
             
-            // Clear the flag before recreating
-            element._editInProgress = false;
-            
-            // Recreate the entire input after modal is dismissed
             setTimeout(() => {
-              console.log("Recreating input after validation failure");
-              // Recreate the input by calling the click handler again
               element.click();
             }, 100);
             
-            return; // Exit early to prevent further processing
+            return;
           } else {
-            // Success - remove the input and restore the function name
-            console.log("Validation succeeded, removing input and restoring function name");
+            // Success - remove input and update display
+            console.log("Rename succeeded, removing input");
             if (input.parentNode) {
               input.parentNode.removeChild(input);
             }
-            // Restore the function name text with the new name
             element.textContent = name;
             element.setAttribute('data-function-name', name);
-            element._editInProgress = false;
           }
         } catch (error) {
           console.error("Error during rename:", error);
-          
           window.showErrorModal("An error occurred while renaming. Please try again.");
           
-          // Remove the blur handler to prevent interference
           input.removeEventListener('blur', blurHandler);
           
-          // Recreate input completely on error too
           if (input.parentNode) {
             input.parentNode.removeChild(input);
           }
           element.textContent = originalName;
-          element._editInProgress = false;
+          editInProgress = false;
           
           setTimeout(() => {
             element.click();
@@ -424,7 +334,6 @@ export function makeFunctionNameEditable(element, functionName) {
           input.parentNode.removeChild(input);
         }
         element.textContent = originalName;
-        element._editInProgress = false;
       }
     };
     
@@ -436,13 +345,12 @@ export function makeFunctionNameEditable(element, functionName) {
     
     // Handle blur
     const blurHandler = function(e) {
-      // Don't complete edit if blur is from modal
       if (document.activeElement === document.body) {
         console.log("Blur due to modal, ignoring");
         return;
       }
       
-      if (!element._editInProgress) {
+      if (!editInProgress) {
         console.log("Calling completeEdit from blur handler");
         completeEdit(this.value.trim());
       }
@@ -457,7 +365,7 @@ export function makeFunctionNameEditable(element, functionName) {
         completeEdit(this.value.trim());
       } else if (e.key === 'Escape') {
         e.preventDefault();
-        element._editInProgress = true;
+        editInProgress = true;
         console.log("Escape key pressed, removing input");
         
         if (input.parentNode) {
