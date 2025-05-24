@@ -160,6 +160,11 @@ function getToggleStates() {
     const name = toggle.id.replace('toggle-', '');
     toggleStates[name] = toggle.checked;
   });
+  
+  // Always include tags so backend will check for AI-enabled tags
+  // Individual tag AI inclusion is controlled in the TagNotes Panel
+  toggleStates.tags = true;
+  
   console.log('[Chat] Toggle states:', toggleStates);
   return toggleStates;
 }
@@ -417,8 +422,8 @@ export async function cacheCurrentFunctionContext() {
     let binaryName = '';
     try {
       const { getCurrentContext } = await import('./TagNotePanel.js');
-      const { binaryName: currentBinaryName } = getCurrentContext();
-      binaryName = currentBinaryName || '';
+      const context = await getCurrentContext();
+      binaryName = context.binaryName || '';
     } catch (error) {
       console.log('[Chat] Could not get binary name:', error);
     }

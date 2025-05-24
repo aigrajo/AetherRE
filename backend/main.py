@@ -18,6 +18,7 @@ from backend.api.routes.notes import router as notes_router
 from backend.api.routes.validation import router as validation_router
 from backend.api.routes.projects import router as projects_router
 from backend.api.routes.tags import router as tags_router
+from backend.api.routes.files import router as files_router
 
 # Import utilities
 from backend.utils.helpers import analyze_xrefs, process_function_data_with_enhancements
@@ -38,6 +39,7 @@ app.include_router(notes_router, prefix="/api")
 app.include_router(validation_router)
 app.include_router(projects_router)
 app.include_router(tags_router)
+app.include_router(files_router)
 
 # Command-line mode functions
 def analyze_binary(binary_path: str):

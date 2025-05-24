@@ -3,19 +3,22 @@ import { updateUIWithFile } from './core.js';
 import { renderFunctionList } from './functionManager.js';
 import { loadProject, getProjectInfo, collectProjectData, applyProjectData } from './projectManager.js';
 
+// Backend file service API base URL
+const FILE_API_BASE = 'http://localhost:8000/api/files';
+
 // Initialize file handling
 export function initFileHandling() {
   console.log('[FILEHANDLER] initFileHandling called');
   
   try {
     console.log('[FILEHANDLER] Getting DOM elements...');
-  const loadFileBtn = document.getElementById('load-file-btn');
-  const fileInput = document.getElementById('file-input');
+    const loadFileBtn = document.getElementById('load-file-btn');
+    const fileInput = document.getElementById('file-input');
     const projectInput = document.getElementById('project-input');
-  const progressContainer = document.getElementById('analysis-progress');
-  const progressFill = document.querySelector('.progress-fill');
-  const progressText = document.querySelector('.progress-text');
-  const appHeader = document.querySelector('.app-header');
+    const progressContainer = document.getElementById('analysis-progress');
+    const progressFill = document.querySelector('.progress-fill');
+    const progressText = document.querySelector('.progress-text');
+    const appHeader = document.querySelector('.app-header');
     
     console.log('[FILEHANDLER] DOM elements found:', {
       loadFileBtn: !!loadFileBtn,
@@ -35,9 +38,9 @@ export function initFileHandling() {
     
     console.log('[FILEHANDLER] Setting up file input listeners...');
   
-  loadFileBtn.addEventListener('click', () => {
-    fileInput.click();
-  });
+    loadFileBtn.addEventListener('click', () => {
+      fileInput.click();
+    });
 
     // Project file input handler (triggered by menu)
     projectInput.addEventListener('change', async (event) => {
@@ -53,16 +56,14 @@ export function initFileHandling() {
       }
     });
 
-  fileInput.addEventListener('change', async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
+    fileInput.addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
 
-    const isBinary = !file.name.endsWith('.json');
-      
       try {
         // Use file.path for Electron file access, or fallback to webkitRelativePath
         const filePath = file.path || file.webkitRelativePath;
-        await processSelectedFile(filePath, file.name, isBinary);
+        await processSelectedFile(filePath);
       } catch (error) {
         console.error('Error processing file:', error);
         // Show error to user
@@ -145,13 +146,6 @@ async function handleSaveProject() {
     }
 
     console.log('Project data collected successfully');
-    console.log('Data summary:', {
-      functionNames: Object.keys(projectData.customizations?.function_names || {}).length,
-      variableNames: Object.keys(projectData.customizations?.variable_names || {}).length,
-      notes: Object.keys(projectData.customizations?.notes || {}).length,
-      tags: Object.keys(projectData.customizations?.tags || {}).length,
-      chatSessions: projectData.chat_history?.sessions?.length || 0
-    });
 
     let success = false;
 
@@ -174,7 +168,9 @@ async function handleSaveProject() {
     } else {
       // No current project file, behave like "Save As"
       console.log('No current project file, showing save dialog...');
-      const defaultFilename = `${projectInfo.binaryName}.aetherre`;
+      
+      // Use backend service to generate default filename
+      const defaultFilename = await generateDefaultProjectFilename(projectInfo.binaryName);
       console.log('Default filename:', defaultFilename);
       
       const result = await window.api.showProjectSaveDialog(projectData, defaultFilename);
@@ -191,15 +187,9 @@ async function handleSaveProject() {
     }
 
     if (success) {
-      // Show success notification
-      const notification = document.createElement('div');
-      notification.className = 'notification success';
-      notification.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #4CAF50; color: white; padding: 12px 24px; border-radius: 4px; z-index: 10000; font-size: 14px;';
-      notification.textContent = state.currentProjectFile ? 
-        `Project saved to ${state.currentProjectFile.split(/[\\/]/).pop()}` : 
-        'Project saved successfully!';
-      document.body.appendChild(notification);
-      setTimeout(() => notification.remove(), 3000);
+      // Show success notification using the backend extracted filename
+      const filename = await extractFilename(state.currentProjectFile);
+      showNotification(`Project saved to ${filename}`, 'success');
     }
   } catch (error) {
     console.error('Error saving project:', error);
@@ -228,7 +218,8 @@ async function handleSaveProjectAs() {
       return;
     }
 
-    const defaultFilename = `${projectInfo.binaryName}.aetherre`;
+    // Use backend service to generate default filename
+    const defaultFilename = await generateDefaultProjectFilename(projectInfo.binaryName);
     console.log('Showing save as dialog...');
     
     const result = await window.api.showProjectSaveDialog(projectData, defaultFilename);
@@ -238,13 +229,9 @@ async function handleSaveProjectAs() {
       console.log(`Project saved as: ${result.filePath}`);
       console.log(`Current project file updated to: ${state.currentProjectFile}`);
       
-      // Show success notification
-      const notification = document.createElement('div');
-      notification.className = 'notification success';
-      notification.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #4CAF50; color: white; padding: 12px 24px; border-radius: 4px; z-index: 10000; font-size: 14px;';
-      notification.textContent = `Project saved as ${result.filePath.split(/[\\/]/).pop()}`;
-      document.body.appendChild(notification);
-      setTimeout(() => notification.remove(), 3000);
+      // Show success notification using the backend extracted filename
+      const filename = await extractFilename(result.filePath);
+      showNotification(`Project saved as ${filename}`, 'success');
     } else {
       console.log('Save as operation was cancelled by user');
     }
@@ -269,12 +256,8 @@ async function handleLoadFileFromMenu() {
     
     console.log('File selected:', filePath);
     
-    // Extract filename
-    const filename = filePath.split(/[\\/]/).pop();
-    const isBinary = !filename.endsWith('.json');
-    
-    // Process the file
-    await processSelectedFile(filePath, filename, isBinary);
+    // Process the file using backend file detection
+    await processSelectedFile(filePath);
     
   } catch (error) {
     console.error('Error loading file from menu:', error);
@@ -323,16 +306,17 @@ async function handleLoadProjectFromMenu() {
  * Clean up old notes and tags files for a new binary analysis
  */
 async function cleanupOldMetadata(binaryName) {
-  const cleanBinaryName = binaryName.replace(/[^\w\d]/g, '_');
-  
   try {
+    // Use backend service to sanitize binary name
+    const sanitizedName = await sanitizeBinaryName(binaryName);
+    
     // Request backend to clean up old files for this binary
-    const response = await fetch(`http://localhost:8000/api/cleanup/${cleanBinaryName}`, {
+    const response = await fetch(`http://localhost:8000/api/cleanup/${sanitizedName}`, {
       method: 'POST'
     });
     
     if (response.ok) {
-      console.log(`Cleaned up old metadata files for ${cleanBinaryName}`);
+      console.log(`Cleaned up old metadata files for ${sanitizedName}`);
     } else {
       console.warn(`Failed to cleanup metadata files: ${response.statusText}`);
     }
@@ -344,101 +328,114 @@ async function cleanupOldMetadata(binaryName) {
 /**
  * Process a selected file (shared logic for menu and file input)
  */
-export async function processSelectedFile(filePath, filename, isBinary) {
+export async function processSelectedFile(filePath) {
   const progressContainer = document.getElementById('analysis-progress');
   const progressFill = document.querySelector('.progress-fill');
   const progressText = document.querySelector('.progress-text');
   const appHeader = document.querySelector('.app-header');
     
-    try {
-      if (!window.api) {
-        throw new Error('API not available - please restart the application');
-      }
+  try {
+    if (!window.api) {
+      throw new Error('API not available - please restart the application');
+    }
 
-      if (isBinary) {
-        // Store original binary name
-        state.originalBinaryName = filename;
-        
-        // Clear current project file when loading a new binary
-        state.currentProjectFile = null;
-        console.log('Cleared current project file - new binary loaded');
-        
-        // Show progress bar and hide load button
-        progressContainer.style.display = 'flex';
-        appHeader.classList.add('analyzing');
-        progressFill.style.width = '0%';
-        progressText.textContent = 'Starting analysis...';
+    // Use backend service to detect file type and validate
+    console.log('Detecting file type...');
+    const fileInfo = await detectFileType(filePath);
+    
+    if (!fileInfo.is_valid) {
+      throw new Error(fileInfo.error || 'Invalid file type');
+    }
 
-        // Start binary analysis
-        const result = await window.api.analyzeBinary(filePath, (progress) => {
-          // Update progress bar
-          progressFill.style.width = `${progress}%`;
-          progressText.textContent = `Analyzing binary... ${progress}%`;
-        });
+    console.log('File type detected:', fileInfo);
 
-        // Hide progress bar and show load button
-        progressContainer.style.display = 'none';
-        appHeader.classList.remove('analyzing');
-        
-        if (result) {
-          state.functionsData = result.data;
-          window.currentData = state.functionsData;
-          state.currentFilePath = result.path;
-          updateUIWithFile(state.originalBinaryName);
-          renderFunctionList(state.functionsData.functions);
-        
+    if (fileInfo.file_type === 'binary') {
+      // Store original binary name
+      state.originalBinaryName = fileInfo.filename;
+      
+      // Clear current project file when loading a new binary
+      state.currentProjectFile = null;
+      console.log('Cleared current project file - new binary loaded');
+      
+      // Show progress bar and hide load button
+      progressContainer.style.display = 'flex';
+      appHeader.classList.add('analyzing');
+      progressFill.style.width = '0%';
+      progressText.textContent = 'Starting analysis...';
+
+      // Start binary analysis
+      const result = await window.api.analyzeBinary(filePath, (progress) => {
+        // Update progress bar
+        progressFill.style.width = `${progress}%`;
+        progressText.textContent = `Analyzing binary... ${progress}%`;
+      });
+
+      // Hide progress bar and show load button
+      progressContainer.style.display = 'none';
+      appHeader.classList.remove('analyzing');
+      
+      if (result) {
+        state.functionsData = result.data;
+        window.currentData = state.functionsData;
+        state.currentFilePath = result.path;
+        updateUIWithFile(state.originalBinaryName);
+        renderFunctionList(state.functionsData.functions);
+      
         // Clean up old metadata files for fresh start
         await cleanupOldMetadata(state.originalBinaryName);
         
         // Enable project menu items now that we have a binary loaded
         enableProjectMenu();
           
-          // Dispatch binary loaded event for TagNote panel
-          console.log(`Binary loaded: ${state.originalBinaryName}`);
-          window.dispatchEvent(new CustomEvent('binary-loaded', {
-            detail: {
-              binaryName: state.originalBinaryName
-            }
-          }));
-        }
-      } else {
-        // For JSON files, try to extract original binary name from the data
-        const result = await window.api.loadJsonFile(filePath);
-        if (result) {
-          state.functionsData = result.data;
-          window.currentData = state.functionsData;
-          state.currentFilePath = result.path;
-          
-          // Try to get original binary name from the analysis data
-          state.originalBinaryName = state.functionsData.metadata?.originalBinary || 
-                                  state.functionsData.originalBinary ||
-                                filename.replace('.json', '');
-          
-          // Clear current project file when loading JSON analysis data
-          state.currentProjectFile = null;
-          console.log('Cleared current project file - JSON analysis loaded');
-          
-          updateUIWithFile(state.originalBinaryName);
-          renderFunctionList(state.functionsData.functions);
+        // Dispatch binary loaded event for TagNote panel
+        console.log(`Binary loaded: ${state.originalBinaryName}`);
+        window.dispatchEvent(new CustomEvent('binary-loaded', {
+          detail: {
+            binaryName: state.originalBinaryName
+          }
+        }));
+      }
+    } else if (fileInfo.file_type === 'json_analysis') {
+      // For JSON files, load the analysis data
+      const result = await window.api.loadJsonFile(filePath);
+      if (result) {
+        state.functionsData = result.data;
+        window.currentData = state.functionsData;
+        state.currentFilePath = result.path;
         
+        // Use backend service to extract original binary name from analysis data
+        state.originalBinaryName = await extractBinaryNameFromAnalysis(
+          state.functionsData, 
+          fileInfo.filename
+        );
+        
+        // Clear current project file when loading JSON analysis data
+        state.currentProjectFile = null;
+        console.log('Cleared current project file - JSON analysis loaded');
+        
+        updateUIWithFile(state.originalBinaryName);
+        renderFunctionList(state.functionsData.functions);
+      
         // For JSON files, don't clean up metadata since user might want to preserve it
         // unless they explicitly load a project file
         
         // Enable project menu items for JSON files too
         enableProjectMenu();
           
-          // Dispatch binary loaded event for TagNote panel
-          window.dispatchEvent(new CustomEvent('binary-loaded', {
-            detail: {
-              binaryName: state.originalBinaryName
-            }
-          }));
-        }
+        // Dispatch binary loaded event for TagNote panel
+        window.dispatchEvent(new CustomEvent('binary-loaded', {
+          detail: {
+            binaryName: state.originalBinaryName
+          }
+        }));
       }
-    } catch (error) {
-      console.error('Error processing file:', error);
-      progressContainer.style.display = 'none';
-      appHeader.classList.remove('analyzing');
+    } else {
+      throw new Error(`Unsupported file type: ${fileInfo.file_type}`);
+    }
+  } catch (error) {
+    console.error('Error processing file:', error);
+    progressContainer.style.display = 'none';
+    appHeader.classList.remove('analyzing');
     throw error;
   }
 }
@@ -467,4 +464,104 @@ export async function checkRecentAnalyses() {
   } catch (error) {
     console.error('Error checking recent analyses:', error);
   }
+}
+
+// Backend service helper functions
+async function detectFileType(filePath) {
+  const response = await fetch(`${FILE_API_BASE}/detect-type`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file_path: filePath })
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to detect file type: ${response.statusText}`);
+  }
+  
+  return await response.json();
+}
+
+async function extractFilename(filePath) {
+  const response = await fetch(`${FILE_API_BASE}/extract-filename`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file_path: filePath })
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to extract filename: ${response.statusText}`);
+  }
+  
+  const result = await response.json();
+  return result.filename;
+}
+
+async function sanitizeBinaryName(binaryName) {
+  const response = await fetch(`${FILE_API_BASE}/sanitize-binary-name`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ binary_name: binaryName })
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to sanitize binary name: ${response.statusText}`);
+  }
+  
+  const result = await response.json();
+  return result.sanitized_name;
+}
+
+async function generateDefaultProjectFilename(binaryName) {
+  const response = await fetch(`${FILE_API_BASE}/generate-default-filename`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ binary_name: binaryName })
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to generate default filename: ${response.statusText}`);
+  }
+  
+  const result = await response.json();
+  return result.default_filename;
+}
+
+async function extractBinaryNameFromAnalysis(analysisData, fallbackFilename) {
+  const response = await fetch(`${FILE_API_BASE}/extract-binary-name`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      analysis_data: analysisData, 
+      fallback_filename: fallbackFilename 
+    })
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to extract binary name: ${response.statusText}`);
+  }
+  
+  const result = await response.json();
+  return result.binary_name;
+}
+
+/**
+ * Show notification to user
+ */
+function showNotification(message, type = 'info') {
+  const notification = document.createElement('div');
+  notification.className = `notification ${type}`;
+  notification.style.cssText = `
+    position: fixed; 
+    top: 20px; 
+    right: 20px; 
+    background: ${type === 'success' ? '#4CAF50' : type === 'error' ? '#f44336' : '#2196F3'}; 
+    color: white; 
+    padding: 12px 24px; 
+    border-radius: 4px; 
+    z-index: 10000; 
+    font-size: 14px;
+  `;
+  notification.textContent = message;
+  document.body.appendChild(notification);
+  setTimeout(() => notification.remove(), 3000);
 } 

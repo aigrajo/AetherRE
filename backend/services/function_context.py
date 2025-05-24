@@ -4,7 +4,8 @@ import json
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
-from backend.services.notes_service import get_note, get_tags
+from backend.services.notes_service import get_note
+from backend.services.tag_service import TagService
 
 
 class FunctionContextService:
@@ -13,6 +14,7 @@ class FunctionContextService:
     def __init__(self):
         self.current_function_data: Dict[str, Dict[str, Any]] = {}
         self.session_context_states: Dict[str, str] = {}  # session_id -> function_id
+        self.tag_service = TagService()  # Initialize TagService instance
     
     def set_current_function(self, function_id: str, data: Dict[str, Any]):
         """Cache all function data when a function is loaded.
@@ -115,20 +117,10 @@ class FunctionContextService:
             
             if toggle_states.get('tags', False):
                 try:
-                    tags_data = get_tags(binary_name, function_id)
-                    if tags_data and 'tags' in tags_data:
-                        # Filter for AI context tags
-                        ai_context_tags = [
-                            tag for tag in tags_data['tags'] 
-                            if tag.get('includeInAI', False)
-                        ]
-                        if ai_context_tags:
-                            # Only include type and value fields
-                            context['tags'] = [
-                                {'type': tag['type'], 'value': tag['value']}
-                                for tag in ai_context_tags
-                            ]
-                            print(f"[FunctionContext] Including {len(ai_context_tags)} AI context tags", file=sys.stderr)
+                    ai_context_tags = self.tag_service.get_ai_context_tags(binary_name, function_id)
+                    if ai_context_tags:
+                        context['tags'] = ai_context_tags
+                        print(f"[FunctionContext] Including {len(ai_context_tags)} AI context tags", file=sys.stderr)
                 except Exception as e:
                     print(f"[FunctionContext] Error fetching tags: {e}", file=sys.stderr)
         

@@ -9,6 +9,9 @@ let currentBinary = null;
 let currentFunctionId = null;
 let activeTabId = 'notes'; // Default tab
 
+// Backend file service API base URL
+const FILE_API_BASE = 'http://localhost:8000/api/files';
+
 /**
  * Initialize the TagNote panel
  */
@@ -140,7 +143,7 @@ function setupTabs() {
  * Handle function selection changes
  * @param {CustomEvent} event - The function-selected event containing the function data
  */
-function handleFunctionChange(event) {
+async function handleFunctionChange(event) {
   const { functionId, functionName } = event.detail;
   console.log(`TagNotePanel: Function changed to ${functionName} (${functionId})`);
   
@@ -161,7 +164,7 @@ function handleFunctionChange(event) {
   currentFunctionId = normalizedFunctionId;
   
   // Dispatch events to load notes and tags
-  dispatchLoadData();
+  await dispatchLoadData();
 }
 
 /**
@@ -197,7 +200,7 @@ function handleBinaryChange(event) {
 /**
  * Dispatch events to load data based on current binary and function
  */
-function dispatchLoadData() {
+async function dispatchLoadData() {
   if (!currentBinary || !currentFunctionId) {
     console.error('TagNotePanel: Cannot load data - missing binary or function ID', {
       currentBinary,
@@ -206,9 +209,27 @@ function dispatchLoadData() {
     return;
   }
   
-  // Clean binary name to ensure proper filesystem compatibility
-  const cleanBinaryName = currentBinary.replace(/[^\w\d]/g, '_');
-  
+  // Use backend service to clean binary name to ensure consistency with getCurrentContext
+  let cleanBinaryName = null;
+  try {
+    const response = await fetch(`${FILE_API_BASE}/sanitize-binary-name`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ binary_name: currentBinary })
+    });
+    
+    if (response.ok) {
+      const result = await response.json();
+      cleanBinaryName = result.sanitized_name;
+    } else {
+      console.warn('Failed to sanitize binary name, using fallback');
+      cleanBinaryName = currentBinary.replace(/[^\w\d]/g, '_');
+    }
+  } catch (error) {
+    console.warn('Error sanitizing binary name:', error);
+    cleanBinaryName = currentBinary.replace(/[^\w\d]/g, '_');
+  }
+
   console.log(`TagNotePanel: Dispatching load events for ${cleanBinaryName}/${currentFunctionId}`);
   
   // Dispatch load note event
@@ -236,9 +257,29 @@ function dispatchLoadData() {
  * Get the current binary name and function ID
  * @returns {Object} The current binary and function ID
  */
-export function getCurrentContext() {
-  // Clean binary name to ensure proper filesystem compatibility
-  const cleanBinaryName = currentBinary ? currentBinary.replace(/[^\w\d]/g, '_') : null;
+export async function getCurrentContext() {
+  // Use backend service to clean binary name to ensure proper filesystem compatibility
+  let cleanBinaryName = null;
+  if (currentBinary) {
+    try {
+      const response = await fetch(`${FILE_API_BASE}/sanitize-binary-name`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ binary_name: currentBinary })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        cleanBinaryName = result.sanitized_name;
+      } else {
+        console.warn('Failed to sanitize binary name, using fallback');
+        cleanBinaryName = currentBinary;
+      }
+    } catch (error) {
+      console.warn('Error sanitizing binary name:', error);
+      cleanBinaryName = currentBinary;
+    }
+  }
   
   const context = {
     binaryName: cleanBinaryName,

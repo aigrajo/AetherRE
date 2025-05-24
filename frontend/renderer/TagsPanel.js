@@ -202,26 +202,27 @@ function setupNewTagForm() {
 }
 
 /**
- * Add a new tag based on form input
+ * Add a new tag
  */
 async function addNewTag() {
   const tagInput = document.getElementById('new-tag-input');
-  const tagType = document.getElementById('new-tag-type');
-  const colorPreview = document.getElementById('color-preview');
-  
-  if (!tagInput || !tagType || !colorPreview) return;
-  
   const tagValue = tagInput.value.trim();
-  const selectedType = tagType.value;
-  const selectedColor = colorPreview.style.backgroundColor;
   
   if (!tagValue) {
     alert('Please enter a tag value');
     return;
   }
   
+  const selectedType = getCurrentTagType();
+  const selectedColor = getCurrentTagColor();
+  
+  if (!selectedType) {
+    alert('Please select a tag type');
+    return;
+  }
+  
   try {
-    const context = getCurrentContext();
+    const context = await getCurrentContext();
     if (!context || !context.binaryName || !context.functionId) {
       alert('No function selected');
       return;
@@ -419,12 +420,13 @@ async function handleTagRightClick(event) {
  * Save current tags to the backend
  */
 async function saveCurrentTags() {
-  // Get current context
-  const context = getCurrentContext();
-  if (!context || !context.binaryName || !context.functionId) return;
-  
   try {
-    // Save tags to backend using API service
+    const context = await getCurrentContext();
+    if (!context || !context.binaryName || !context.functionId) {
+      console.warn('No context available for saving tags');
+      return;
+    }
+    
     await apiService.saveTags(context.binaryName, context.functionId, currentTags);
     console.log('Tags saved successfully');
   } catch (error) {
@@ -465,11 +467,14 @@ export function setCurrentTags(tags) {
 
 /**
  * Remove a tag
+ * @param {string} tagType - The type of tag to remove
+ * @param {string} tagValue - The value of tag to remove
  */
 async function removeTag(tagType, tagValue) {
   try {
-    const context = getCurrentContext();
+    const context = await getCurrentContext();
     if (!context || !context.binaryName || !context.functionId) {
+      alert('No function selected');
       return;
     }
     
@@ -481,7 +486,7 @@ async function removeTag(tagType, tagValue) {
     );
     
     if (result.success) {
-      // Reload tags to reflect the removal
+      // Reload tags to update the display
       await loadCurrentTags();
     } else {
       alert(result.message || 'Failed to remove tag');
@@ -494,13 +499,27 @@ async function removeTag(tagType, tagValue) {
 
 /**
  * Toggle AI inclusion for a tag
+ * @param {string} tagType - The type of tag
+ * @param {string} tagValue - The value of tag
  */
 async function toggleTagAiInclusion(tagType, tagValue) {
   try {
-    const context = getCurrentContext();
+    console.log(`toggleTagAiInclusion called with type: ${tagType}, value: ${tagValue}`);
+    
+    const context = await getCurrentContext();
+    console.log('Context for toggle operation:', context);
+    
     if (!context || !context.binaryName || !context.functionId) {
+      console.warn('No context available for toggling AI inclusion');
+      console.warn('Context details:', {
+        hasContext: !!context,
+        binaryName: context?.binaryName,
+        functionId: context?.functionId
+      });
       return;
     }
+    
+    console.log(`Calling API to toggle AI inclusion for ${context.binaryName}/${context.functionId} - ${tagType}:${tagValue}`);
     
     const result = await apiService.toggleAiInclusion(
       context.binaryName,
@@ -509,25 +528,30 @@ async function toggleTagAiInclusion(tagType, tagValue) {
       tagValue
     );
     
+    console.log('Toggle AI inclusion result:', result);
+    
     if (result.success) {
-      // Reload tags to reflect the change
+      console.log('Toggle successful, reloading tags...');
+      // Reload tags to update the display
       await loadCurrentTags();
     } else {
-      alert(result.message || 'Failed to toggle AI inclusion');
+      console.error('Failed to toggle AI inclusion:', result.message);
+      alert(`Failed to toggle AI inclusion: ${result.message}`);
     }
   } catch (error) {
     console.error('Error toggling AI inclusion:', error);
-    alert('Error toggling AI inclusion: ' + error.message);
+    alert(`Error toggling AI inclusion: ${error.message}`);
   }
 }
 
 /**
- * Load current tags for the selected function
+ * Load tags for current context
  */
 async function loadCurrentTags() {
   try {
-    const context = getCurrentContext();
+    const context = await getCurrentContext();
     if (!context || !context.binaryName || !context.functionId) {
+      console.warn('No context available for loading tags');
       currentTags = [];
       renderTags();
       return;
@@ -535,6 +559,14 @@ async function loadCurrentTags() {
     
     const response = await apiService.getTags(context.binaryName, context.functionId);
     currentTags = response.tags || [];
+    
+    // Ensure all tags have colors
+    currentTags.forEach(tag => {
+      if (!tag.color) {
+        tag.color = TAG_COLORS[Math.floor(Math.random() * TAG_COLORS.length)];
+      }
+    });
+    
     renderTags();
   } catch (error) {
     console.error('Error loading tags:', error);
@@ -551,4 +583,20 @@ function rgbToHex(rgb) {
   if (!result || result.length < 3) return '#000000';
   
   return '#' + ((1 << 24) + (parseInt(result[0]) << 16) + (parseInt(result[1]) << 8) + parseInt(result[2])).toString(16).slice(1);
+}
+
+/**
+ * Get currently selected tag type
+ */
+function getCurrentTagType() {
+  const tagTypeSelect = document.getElementById('new-tag-type');
+  return tagTypeSelect ? tagTypeSelect.value : null;
+}
+
+/**
+ * Get currently selected tag color
+ */
+function getCurrentTagColor() {
+  const colorPreview = document.getElementById('color-preview');
+  return colorPreview ? colorPreview.style.backgroundColor : TAG_COLORS[0];
 } 

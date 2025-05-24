@@ -2,6 +2,9 @@
 import { state } from './core.js';
 import { apiService } from './apiService.js';
 
+// Backend file service API base URL
+const FILE_API_BASE = 'http://localhost:8000/api/files';
+
 // Project file format version
 const PROJECT_VERSION = "1.0";
 
@@ -14,7 +17,7 @@ async function calculateBinaryHash() {
   }
   
   try {
-    // Use the backend API to calculate hash
+    // Use the original backend API to maintain compatibility with existing project files
     const response = await apiService.calculateBinaryHash(state.currentFilePath);
     return response.hash;
   } catch (error) {
@@ -26,21 +29,52 @@ async function calculateBinaryHash() {
 /**
  * Get the current binary name without extension
  */
-function getCurrentBinaryName() {
+async function getCurrentBinaryName() {
   if (!state.originalBinaryName) {
     throw new Error("No binary name available");
   }
   
-  // Remove file extension for clean binary name
-  return state.originalBinaryName.replace(/\.[^/.]+$/, "");
+  try {
+    // Use backend service to remove extension
+    const response = await fetch(`${FILE_API_BASE}/remove-extension`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename: state.originalBinaryName.trim() })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to process binary name: ${response.statusText}`);
+    }
+    
+    const result = await response.json();
+    return result.stem;
+  } catch (error) {
+    console.error('Error processing binary name:', error);
+    throw new Error("Failed to process binary name");
+  }
 }
 
 /**
  * Clean binary name for filesystem compatibility
  */
 async function cleanBinaryName(name) {
-  const response = await apiService.cleanBinaryName(name);
-  return response.cleaned_name;
+  try {
+    const response = await fetch(`${FILE_API_BASE}/sanitize-binary-name`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ binary_name: name.trim() })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to sanitize binary name: ${response.statusText}`);
+    }
+    
+    const result = await response.json();
+    return result.sanitized_name;
+  } catch (error) {
+    console.error('Error sanitizing binary name:', error);
+    throw new Error("Failed to sanitize binary name");
+  }
 }
 
 /**
@@ -86,7 +120,7 @@ async function collectAllNotes() {
     const { getCurrentContext } = await import('./TagNotePanel.js');
     const { getNoteContent } = await import('./NoteEditor.js');
     
-    const currentContext = getCurrentContext();
+    const currentContext = await getCurrentContext();
     if (currentContext && currentContext.binaryName && currentContext.functionId) {
       const currentNoteContent = getNoteContent();
       if (currentNoteContent && currentNoteContent.trim()) {
@@ -99,7 +133,7 @@ async function collectAllNotes() {
   
   // For other functions, we still need to query the backend since we don't have
   // a centralized frontend state for all notes
-  const binaryName = await cleanBinaryName(getCurrentBinaryName());
+  const binaryName = await cleanBinaryName(await getCurrentBinaryName());
   
   if (state.functionsData?.functions) {
     for (const func of state.functionsData.functions) {
@@ -135,7 +169,7 @@ async function collectAllTags() {
     const { getCurrentContext } = await import('./TagNotePanel.js');
     const { getCurrentTags } = await import('./TagsPanel.js');
     
-    const currentContext = getCurrentContext();
+    const currentContext = await getCurrentContext();
     if (currentContext && currentContext.binaryName && currentContext.functionId) {
       const currentTags = getCurrentTags();
       console.log(`Current function ${currentContext.functionId} has ${currentTags?.length || 0} tags from frontend`);
@@ -149,7 +183,7 @@ async function collectAllTags() {
   }
   
   // For other functions, query the backend
-  const binaryName = await cleanBinaryName(getCurrentBinaryName());
+  const binaryName = await cleanBinaryName(await getCurrentBinaryName());
   
   if (state.functionsData?.functions) {
     for (const func of state.functionsData.functions) {
@@ -303,6 +337,16 @@ async function applyProjectCustomizations(projectData) {
   
   console.log('Starting to apply project customizations...');
   
+  // Validate that we have the necessary state to apply customizations
+  if (!state.originalBinaryName || !state.functionsData) {
+    throw new Error('Binary state not properly initialized. Please ensure the binary is loaded before applying project customizations.');
+  }
+  
+  console.log('Binary state validation passed:', {
+    originalBinaryName: state.originalBinaryName,
+    functionsCount: state.functionsData?.functions?.length || 0
+  });
+  
   // Apply function name customizations
   if (customizations.function_names) {
     console.log(`Applying ${Object.keys(customizations.function_names).length} custom function names...`);
@@ -352,7 +396,7 @@ async function applyProjectCustomizations(projectData) {
   // Then, if there's a currently selected function, refresh its notes/tags
   try {
     const { getCurrentContext } = await import('./TagNotePanel.js');
-    const currentContext = getCurrentContext();
+    const currentContext = await getCurrentContext();
     
     let targetFunctionId = null;
     let targetFunctionName = null;
@@ -555,41 +599,58 @@ async function applyCustomVariableNames(variableNames) {
  * Apply notes to functions
  */
 async function applyNotes(notes) {
-  const binaryName = await cleanBinaryName(getCurrentBinaryName());
-  let appliedCount = 0;
-  
-  for (const [functionAddress, noteContent] of Object.entries(notes)) {
+  try {
+    console.log('applyNotes: Starting to apply notes...');
+    console.log('applyNotes: Current state:', {
+      originalBinaryName: state.originalBinaryName,
+      functionsDataExists: !!state.functionsData
+    });
+    
+    const binaryName = await cleanBinaryName(await getCurrentBinaryName());
+    console.log('applyNotes: Using binary name:', binaryName);
+    
+    let appliedCount = 0;
+    
+    for (const [functionAddress, noteContent] of Object.entries(notes)) {
+      try {
+        console.log(`applyNotes: Applying note for function ${functionAddress}...`);
+        const response = await fetch(`http://localhost:8000/api/notes/${binaryName}/${functionAddress}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ content: noteContent })
+        });
+        
+        if (response.ok) {
+          appliedCount++;
+          console.log(`applyNotes: Successfully applied note for function ${functionAddress}`);
+        } else {
+          console.warn(`applyNotes: Failed to apply note for function ${functionAddress}: ${response.status} ${response.statusText}`);
+        }
+      } catch (error) {
+        console.warn(`applyNotes: Failed to apply note for function ${functionAddress}:`, error);
+      }
+    }
+    
+    console.log(`applyNotes: Applied ${appliedCount} function notes`);
+    
+    // Also update frontend note editor if it's currently showing one of these functions
     try {
-      const response = await fetch(`http://localhost:8000/api/notes/${binaryName}/${functionAddress}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ content: noteContent })
-      });
+      const { getCurrentContext } = await import('./TagNotePanel.js');
+      const { setNoteContent } = await import('./NoteEditor.js');
       
-      if (response.ok) {
-        appliedCount++;
+      const currentContext = await getCurrentContext();
+      if (currentContext && currentContext.functionId && notes[currentContext.functionId]) {
+        console.log(`applyNotes: Updating note editor with loaded content for function ${currentContext.functionId}`);
+        setNoteContent(notes[currentContext.functionId]);
       }
     } catch (error) {
-      console.warn(`Failed to apply note for function ${functionAddress}:`, error);
-    }
-  }
-  
-  console.log(`Applied ${appliedCount} function notes`);
-  
-  // Also update frontend note editor if it's currently showing one of these functions
-  try {
-    const { getCurrentContext } = await import('./TagNotePanel.js');
-    const { setNoteContent } = await import('./NoteEditor.js');
-    
-    const currentContext = getCurrentContext();
-    if (currentContext && currentContext.functionId && notes[currentContext.functionId]) {
-      console.log(`Updating note editor with loaded content for function ${currentContext.functionId}`);
-      setNoteContent(notes[currentContext.functionId]);
+      console.warn('applyNotes: Could not update frontend note editor:', error);
     }
   } catch (error) {
-    console.warn('Could not update frontend note editor:', error);
+    console.error('applyNotes: Critical error in applyNotes:', error);
+    throw new Error(`Failed to apply notes: ${error.message}`);
   }
 }
 
@@ -597,7 +658,7 @@ async function applyNotes(notes) {
  * Apply tags to functions
  */
 async function applyTags(tags) {
-  const binaryName = await cleanBinaryName(getCurrentBinaryName());
+  const binaryName = await cleanBinaryName(await getCurrentBinaryName());
   let appliedCount = 0;
   
   for (const [functionAddress, functionTags] of Object.entries(tags)) {
@@ -624,7 +685,7 @@ async function applyTags(tags) {
   try {
     const { getCurrentContext } = await import('./TagNotePanel.js');
     
-    const currentContext = getCurrentContext();
+    const currentContext = await getCurrentContext();
     if (currentContext && currentContext.functionId && tags[currentContext.functionId]) {
       console.log(`Updating tags panel with loaded tags for function ${currentContext.functionId}`);
       
@@ -719,6 +780,17 @@ function showSuccessMessage(message) {
   // Create a simple success notification
   const notification = document.createElement('div');
   notification.className = 'project-notification success';
+  notification.style.cssText = `
+    position: fixed; 
+    top: 20px; 
+    right: 20px; 
+    background: #4CAF50; 
+    color: white; 
+    padding: 12px 24px; 
+    border-radius: 4px; 
+    z-index: 10000; 
+    font-size: 14px;
+  `;
   notification.textContent = message;
   document.body.appendChild(notification);
   

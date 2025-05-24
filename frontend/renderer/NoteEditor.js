@@ -104,7 +104,7 @@ async function saveNote(contentOrEvent) {
   
   // Store old content for undo/redo
   const oldContent = lastSavedNote;
-  const context = getCurrentContext();
+  const context = await getCurrentContext();
   
   // Save the note to backend API
   if (context && context.binaryName && context.functionId) {
@@ -142,9 +142,9 @@ async function saveNote(contentOrEvent) {
       content: newContent,
       context: JSON.parse(JSON.stringify(context))
     },
-    undo: () => {
+    undo: async () => {
       // Restore the old note content if we're on the same context
-      const currentContext = getCurrentContext();
+      const currentContext = await getCurrentContext();
       if (currentContext && 
           context && 
           currentContext.type === context.type && 
@@ -160,9 +160,9 @@ async function saveNote(contentOrEvent) {
         }
       }
     },
-    redo: () => {
+    redo: async () => {
       // Restore the new note content if we're on the same context
-      const currentContext = getCurrentContext();
+      const currentContext = await getCurrentContext();
       if (currentContext && 
           context && 
           currentContext.type === context.type && 
