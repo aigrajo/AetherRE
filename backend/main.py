@@ -20,7 +20,7 @@ from backend.api.routes.projects import router as projects_router
 from backend.api.routes.tags import router as tags_router
 
 # Import utilities
-from backend.utils.helpers import analyze_xrefs
+from backend.utils.helpers import analyze_xrefs, process_function_data_with_enhancements
 
 # Initialize FastAPI app
 app = FastAPI(title="AetherRE Backend API")
@@ -70,15 +70,32 @@ def analyze_json_with_xrefs(json_string: str):
     """Analyze JSON data with cross-reference information."""
     try:
         data = json.loads(json_string)
-        xref_data = analyze_xrefs(None, data)
-        if isinstance(data, list):
+        
+        # Import the enhanced processing function
+        try:
+            from backend.utils.helpers import analyze_xrefs, process_function_data_with_enhancements
+            
+            # Process CFG layouts and other enhancements
+            enhanced_data = process_function_data_with_enhancements(data)
+            
+            # Compute cross-references
+            xref_data = analyze_xrefs(None, enhanced_data)
+        except ImportError as import_err:
+            print(f"[DEBUG] Failed to import enhanced processing: {import_err}", file=sys.stderr)
+            # Fallback to basic xref processing
+            from backend.utils.helpers import analyze_xrefs
+            enhanced_data = data
+            xref_data = analyze_xrefs(None, enhanced_data)
+        
+        if isinstance(enhanced_data, list):
             result = {
-                "functions": data,
+                "functions": enhanced_data,
                 "cross_references": xref_data
             }
         else:
-            data["cross_references"] = xref_data
-            result = data
+            enhanced_data["cross_references"] = xref_data
+            result = enhanced_data
+            
         print(json.dumps({
             "type": "analysis_complete",
             "data": result

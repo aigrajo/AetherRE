@@ -128,6 +128,145 @@ def extract_assembly(func):
         assembly.append(asm_data)
     return assembly
 
+def compute_cfg_layout_in_ghidra(cfg_data):
+    """
+    Compute CFG layout within Ghidra environment.
+    This is a simplified version of the backend layout algorithm.
+    """
+    if not cfg_data or not cfg_data.get('nodes'):
+        return cfg_data
+    
+    nodes = cfg_data['nodes']
+    edges = cfg_data.get('edges', [])
+    
+    # Simple layout computation (port of frontend algorithm)
+    def compute_node_dimensions(node):
+        instruction_count = len(node.get('instructions', []))
+        lines_to_show = min(instruction_count, 10)
+        has_more_line = instruction_count > 10
+        min_height = 25 + (lines_to_show * 15) + (15 if has_more_line else 0) + 15
+        return {'width': 250, 'height': max(80, min_height)}
+    
+    if not nodes:
+        layout = {'nodePositions': [], 'edgeRoutes': []}
+    else:
+        # Create node map
+        node_map = {}
+        for index, node in enumerate(nodes):
+            node_map[node['id']] = index
+        
+        # Create adjacency lists
+        outgoing = [[] for _ in range(len(nodes))]
+        incoming = [[] for _ in range(len(nodes))]
+        
+        for edge in edges:
+            source_idx = node_map.get(edge['source'])
+            target_idx = node_map.get(edge['target'])
+            if source_idx is not None and target_idx is not None:
+                outgoing[source_idx].append(target_idx)
+                incoming[target_idx].append(source_idx)
+        
+        # Assign layers
+        layers = []
+        node_layer = [-1] * len(nodes)
+        stack = []
+        visited = [False] * len(nodes)
+        
+        # Find roots
+        for i in range(len(nodes)):
+            if len(incoming[i]) == 0:
+                stack.append(i)
+        
+        if len(stack) == 0 and len(nodes) > 0:
+            stack.append(0)
+        
+        # BFS to assign layers
+        layer = 0
+        while stack:
+            current_layer = []
+            next_stack = []
+            
+            for node_idx in stack:
+                if visited[node_idx]:
+                    continue
+                visited[node_idx] = True
+                node_layer[node_idx] = layer
+                current_layer.append(node_idx)
+                
+                for target_idx in outgoing[node_idx]:
+                    if not visited[target_idx]:
+                        next_stack.append(target_idx)
+            
+            layers.append(current_layer)
+            stack = next_stack
+            layer += 1
+        
+        # Handle unvisited nodes
+        unvisited_nodes = []
+        for i in range(len(nodes)):
+            if not visited[i]:
+                node_layer[i] = len(layers)
+                unvisited_nodes.append(i)
+        
+        if unvisited_nodes:
+            layers.append(unvisited_nodes)
+        
+        # Assign coordinates
+        node_positions = []
+        for idx, node in enumerate(nodes):
+            layer_idx = node_layer[idx]
+            layer_nodes = layers[layer_idx]
+            layer_index = layer_nodes.index(idx)
+            
+            horizontal_spacing = 1200
+            x = (layer_index + 1) * (horizontal_spacing / (len(layer_nodes) + 1))
+            
+            vertical_spacing = 250
+            y = (layer_idx + 1) * vertical_spacing
+            
+            dimensions = compute_node_dimensions(node)
+            
+            node_positions.append({
+                'id': node['id'],
+                'x': x,
+                'y': y,
+                'width': dimensions['width'],
+                'height': dimensions['height']
+            })
+        
+        # Compute edge routes
+        edge_routes = []
+        pos_lookup = {pos['id']: pos for pos in node_positions}
+        
+        for edge in edges:
+            source_pos = pos_lookup.get(edge['source'])
+            target_pos = pos_lookup.get(edge['target'])
+            
+            if source_pos and target_pos:
+                route = {
+                    'source': edge['source'],
+                    'target': edge['target'],
+                    'points': [
+                        {
+                            'x': source_pos['x'],
+                            'y': source_pos['y'] + source_pos['height'] / 2
+                        },
+                        {
+                            'x': target_pos['x'],
+                            'y': target_pos['y'] - target_pos['height'] / 2
+                        }
+                    ],
+                    'type': edge.get('type', 'unconditional')
+                }
+                edge_routes.append(route)
+        
+        layout = {'nodePositions': node_positions, 'edgeRoutes': edge_routes}
+    
+    # Add layout to CFG data
+    enhanced_cfg = cfg_data.copy()
+    enhanced_cfg['layout'] = layout
+    return enhanced_cfg
+
 def extract_cfg(func):
     """Extract Control Flow Graph data for a function"""
     from ghidra.program.model.block import BasicBlockModel
@@ -183,7 +322,10 @@ def extract_cfg(func):
             }
             cfg_data["edges"].append(edge_data)
     
-    return cfg_data
+    # Compute layout information and add it to the CFG data
+    cfg_with_layout = compute_cfg_layout_in_ghidra(cfg_data)
+    
+    return cfg_with_layout
 
 # Main function
 def run():

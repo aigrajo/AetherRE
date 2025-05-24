@@ -7,6 +7,7 @@ export function updateCFGTab(func) {
   // Debug what we have in the function object
   console.log('Function object for CFG:', func);
   console.log('CFG data available:', func && func.cfg ? 'Yes' : 'No');
+  console.log('CFG layout available:', func && func.cfg && func.cfg.layout ? 'Yes' : 'No');
   
   if (!func || !func.cfg) {
     cfgCanvas.innerHTML = `
@@ -14,6 +15,18 @@ export function updateCFGTab(func) {
         <p>No CFG data available for this function.</p>
         <p style="margin-top: 10px; font-size: 12px;">
           Note: You need to analyze or re-analyze your binary with the updated Ghidra script to extract CFG data.
+        </p>
+      </div>`;
+    return;
+  }
+  
+  // Check if layout data is available (computed by backend)
+  if (!func.cfg.layout) {
+    cfgCanvas.innerHTML = `
+      <div style="padding: 20px; text-align: center; color: var(--text-secondary);">
+        <p>CFG layout data not available.</p>
+        <p style="margin-top: 10px; font-size: 12px;">
+          This binary was analyzed with an older version. Please re-analyze to get CFG layout data.
         </p>
       </div>`;
     return;
@@ -43,44 +56,9 @@ export function updateCFGTab(func) {
     pixelRatio: pixelRatio
   };
   
-  // Prepare node and edge data
-  const nodes = func.cfg.nodes.map(node => {
-    const instructionCount = node.instructions.length;
-    // Calculate node dimensions based on content
-    // Ensure height can accommodate up to 11 lines (10 instructions + 1 "more" line)
-    // 25px header + 15px per instruction line + 15px padding
-    const minHeight = 25 + (Math.min(instructionCount, 10) * 15) + (instructionCount > 10 ? 15 : 0) + 15;
-    return {
-      id: node.id,
-      address: node.start_address,
-      endAddress: node.end_address,
-      instructions: node.instructions,
-      width: 250, // Increased width
-      height: Math.max(80, minHeight)
-    };
-  });
-  
-  const edges = func.cfg.edges.map(edge => {
-    return {
-      source: edge.source,
-      target: edge.target,
-      type: edge.type
-    };
-  });
-  
-  // Use our custom graph layout algorithm from preload.js
-  if (!window.CFGVisualizer) {
-    console.error('CFGVisualizer not available in window');
-    cfgCanvas.innerHTML = `
-      <div style="padding: 20px; text-align: center; color: var(--text-secondary);">
-        <p>Error: CFG visualization library not available.</p>
-      </div>`;
-    return;
-  }
-  
-  console.log('Using CFGVisualizer to layout graph');
-  const layout = window.CFGVisualizer.layoutGraph(nodes, edges);
-  console.log('Layout result:', layout);
+  // Use pre-computed layout from backend
+  const layout = func.cfg.layout;
+  console.log('Using pre-computed layout from backend:', layout);
   
   // Function to draw the CFG on the canvas
   function drawCFG() {
@@ -149,7 +127,7 @@ export function updateCFGTab(func) {
     
     // Draw nodes
     layout.nodePositions.forEach(pos => {
-      const node = nodes.find(n => n.id === pos.id);
+      const node = func.cfg.nodes.find(n => n.id === pos.id);
       if (!node) return;
       
       const x = pos.x - pos.width / 2;
@@ -167,7 +145,7 @@ export function updateCFGTab(func) {
       // Node title (address)
       ctx.fillStyle = '#A0A0A0';
       ctx.font = '12px monospace';
-      ctx.fillText(`Address: ${node.address}`, x + 10, y + 20);
+      ctx.fillText(`Address: ${node.start_address}`, x + 10, y + 20);
       
       // Node content (instructions)
       ctx.fillStyle = '#E4E4E4';
