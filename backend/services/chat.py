@@ -10,7 +10,8 @@ import openai
 from backend.config.settings import OPENAI_API_KEY, DEFAULT_MODEL, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE, SESSION_TIMEOUT_HOURS
 from backend.config.rate_limits import check_rate_limit
 from backend.utils.helpers import get_cache_key
-from backend.services.notes_service import get_note, get_tags
+from backend.services.function_context import function_context_service
+from backend.services.session_manager import session_manager
 
 # Set OpenAI API key
 openai.api_key = OPENAI_API_KEY
@@ -49,14 +50,23 @@ class ChatSession:
             # Truncate message if too long
             truncated_message = first_message[:100]
             
-            # Get current function and context information
-            function_name = getattr(self, 'function_name', 'Unknown Function')
-            active_context = getattr(self, 'active_context', [])
+            # Get current function context for better naming
+            function_name = "Unknown Function"
+            active_context = []
+            
+            # Try to get function context from session manager
+            try:
+                function_id = session_manager.get_session_function(self.session_id)
+                if function_id and function_id in function_context_service.current_function_data:
+                    function_data = function_context_service.current_function_data[function_id]
+                    function_name = function_data.get('function_name', 'Unknown Function')
+            except Exception as e:
+                print(f"[Chat] Could not get function context for naming: {e}", file=sys.stderr)
             
             # Create a prompt for name generation
             messages = [
-                {"role": "system", "content": "Generate a short, descriptive title (max 6 words) for a chat based on the first message, function being analyzed, and active context toggles. The title should capture the main topic or question."},
-                {"role": "user", "content": f"First message: {truncated_message}\nFunction: {function_name}\nActive context: {', '.join(active_context)}"}
+                {"role": "system", "content": "Generate a short, descriptive title (max 6 words) for a chat based on the first message and function being analyzed. The title should capture the main topic or question."},
+                {"role": "user", "content": f"First message: {truncated_message}\nFunction: {function_name}"}
             ]
             
             # Call OpenAI API to generate name
@@ -92,20 +102,26 @@ def cleanup_old_sessions():
             sessions_to_remove.append(session_id)
     for session_id in sessions_to_remove:
         del chat_sessions[session_id]
+        session_manager.clear_session_associations(session_id)
 
-async def stream_chat_response(message: str, context: Dict[str, Any], session_id: Optional[str] = None) -> AsyncGenerator[str, None]:
+async def stream_chat_response(message: str, session_id: Optional[str] = None, 
+                             toggle_states: Dict[str, bool] = None,
+                             dynamic_content: Optional[Dict[str, Any]] = None,
+                             function_id: Optional[str] = None) -> AsyncGenerator[str, None]:
     """Stream chat responses from OpenAI API.
     
     Args:
         message: User message
-        context: Context data for the function being analyzed
         session_id: Optional session ID for continuing conversations
+        toggle_states: Dictionary of what context to include
+        dynamic_content: Dynamic content like current pseudocode
+        function_id: Function to associate with session
         
     Yields:
         str: JSON-formatted event stream data
     """
     print(f"[Chat] Received message: {message}", file=sys.stderr)
-    print(f"[Chat] Context: {json.dumps(context, indent=2)}", file=sys.stderr)
+    print(f"[Chat] Toggle states: {toggle_states}", file=sys.stderr)
     
     # Check rate limits
     allowed, error_message = check_rate_limit()
@@ -119,9 +135,22 @@ async def stream_chat_response(message: str, context: Dict[str, Any], session_id
     if not session_id or session_id not in chat_sessions:
         session_id = hashlib.md5(str(datetime.now()).encode()).hexdigest()
         chat_sessions[session_id] = ChatSession(session_id)
+        session_manager.set_current_session(session_id)
+    
+    # Associate session with function if provided
+    if function_id:
+        session_manager.associate_session_with_function(session_id, function_id)
     
     session = chat_sessions[session_id]
     session.add_message("user", message)
+    
+    # Use the new context service to build context
+    toggle_states = toggle_states or {}
+    context = function_context_service.get_context_for_session(
+        session_id, toggle_states, dynamic_content
+    )
+    
+    print(f"[Chat] Built context with keys: {list(context.keys())}", file=sys.stderr)
     
     # Prepare the prompt with context and chat history
     system_prompt = """You are an AI assistant helping with reverse engineering. 
@@ -134,6 +163,51 @@ async def stream_chat_response(message: str, context: Dict[str, Any], session_id
     # Add chat history
     for msg in session.get_messages():
         messages.append(msg)
+    
+    # Build context prompt using the same formatting logic
+    context_prompt = build_context_prompt(context)
+    if context_prompt.strip():
+        messages.append({"role": "system", "content": context_prompt})
+
+    try:
+        print("[Chat] Checking OpenAI API key...", file=sys.stderr)
+        if not openai.api_key:
+            error_msg = "OpenAI API key not configured. Please set your API key in the backend configuration."
+            yield f"data: {json.dumps({'reply': error_msg, 'session_id': session_id, 'error_type': 'configuration_error'})}\n\n"
+            await asyncio.sleep(0)
+            return
+            
+        print("[Chat] Calling OpenAI API...", file=sys.stderr)
+        client = openai.OpenAI()
+        response = client.chat.completions.create(
+            model=DEFAULT_MODEL,
+            messages=messages,
+            max_tokens=DEFAULT_MAX_TOKENS,
+            temperature=DEFAULT_TEMPERATURE,
+            stream=True
+        )
+        
+        full_reply = ""
+        for chunk in response:
+            if chunk.choices[0].delta.content:
+                content = chunk.choices[0].delta.content
+                full_reply += content
+                yield f"data: {json.dumps({'reply': content, 'session_id': session_id})}\n\n"
+                await asyncio.sleep(0)
+        
+        # Add assistant's response to chat history
+        session.add_message("assistant", full_reply)
+        
+    except Exception as e:
+        print(f"[Chat] Error: {str(e)}", file=sys.stderr)
+        error_message = f"Error: {str(e)}"
+        yield f"data: {json.dumps({'reply': error_message, 'session_id': session_id, 'error_type': 'api_error'})}\n\n"
+        await asyncio.sleep(0)
+
+def build_context_prompt(context: Dict[str, Any]) -> str:
+    """Build context prompt from context data."""
+    if not context:
+        return ""
     
     # Format assembly instructions
     assembly_text = ""
@@ -192,18 +266,17 @@ async def stream_chat_response(message: str, context: Dict[str, Any], session_id
     if context.get('tags') and len(context['tags']) > 0:
         tags_text = "\nTags:\n"
         for tag in context['tags']:
-            # Only use type and value fields
             tag_info = f"- {tag['value']} (Type: {tag['type']})"
             tags_text += tag_info + "\n"
 
-    # Add current context
+    # Build context prompt
     context_prompt = f"""
 Function Context:
 - Name: {context.get('functionName')}
 - Address: {context.get('address')}
 
 Pseudocode Analysis:
-{context.get('pseudocode')}
+{context.get('pseudocode', '')}
 {assembly_text}
 {variables_text}
 {xrefs_text}
@@ -212,39 +285,7 @@ Pseudocode Analysis:
 {notes_text}
 {tags_text}
 """
-    messages.append({"role": "system", "content": context_prompt})
-
-    try:
-        print("[Chat] Checking OpenAI API key...", file=sys.stderr)
-        if not openai.api_key:
-            raise ValueError("OpenAI API key not found in environment variables")
-            
-        print("[Chat] Calling OpenAI API...", file=sys.stderr)
-        client = openai.OpenAI()
-        response = client.chat.completions.create(
-            model=DEFAULT_MODEL,
-            messages=messages,
-            max_tokens=DEFAULT_MAX_TOKENS,
-            temperature=DEFAULT_TEMPERATURE,
-            stream=True
-        )
-        
-        full_reply = ""
-        for chunk in response:
-            if chunk.choices[0].delta.content:
-                content = chunk.choices[0].delta.content
-                full_reply += content
-                yield f"data: {json.dumps({'reply': content, 'session_id': session_id})}\n\n"
-                await asyncio.sleep(0)
-        
-        # Add assistant's response to chat history
-        session.add_message("assistant", full_reply)
-        
-    except Exception as e:
-        print(f"[Chat] Error: {str(e)}", file=sys.stderr)
-        error_message = f"Error: {str(e)}"
-        yield f"data: {json.dumps({'reply': error_message, 'session_id': session_id})}\n\n"
-        await asyncio.sleep(0)
+    return context_prompt
 
 # Functions for session management
 def create_new_session() -> str:

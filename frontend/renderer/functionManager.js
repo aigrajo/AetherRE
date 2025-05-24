@@ -2,6 +2,7 @@ import { state } from './core.js';
 import { switchTab } from './tabManager.js';
 import { updateAssemblyTab, updateXRefsTab, updateVariablesTab, updateStringsTab, updateCFGTab } from './tabManager.js';
 import { makeFunctionNameEditable } from './functionRenamer.js';
+import { cacheCurrentFunctionContext } from './chat.js';
 
 // Debugging
 const DEBUG = true;
@@ -113,6 +114,11 @@ export function displayFunctionInfo(func) {
   updateVariablesTab(func);
   updateStringsTab(func);
   updateCFGTab(func);
+  
+  // Cache the function context in the backend for chat
+  setTimeout(() => {
+    cacheCurrentFunctionContext();
+  }, 100); // Small delay to ensure all DOM updates are complete
   
   // Dispatch event for TagNote panel
   debugLog(`Dispatching function-selected event for ${func.name} (${func.address})`);

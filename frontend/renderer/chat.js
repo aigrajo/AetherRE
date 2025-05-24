@@ -152,6 +152,44 @@ export async function loadChatHistory(sessionId) {
   }
 }
 
+// Get current toggle states
+function getToggleStates() {
+  const toggleStates = {};
+  const toggles = document.querySelectorAll('.toggle-label input[type="checkbox"]');
+  toggles.forEach(toggle => {
+    const name = toggle.id.replace('toggle-', '');
+    toggleStates[name] = toggle.checked;
+  });
+  console.log('[Chat] Toggle states:', toggleStates);
+  return toggleStates;
+}
+
+// Get dynamic content (like current pseudocode)
+function getDynamicContent(toggleStates) {
+  const dynamicContent = {};
+  
+  // Include current pseudocode if the toggle is enabled
+  if (toggleStates.pseudocode) {
+    dynamicContent.pseudocode = state.monacoEditor ? state.monacoEditor.getValue() : '';
+  }
+  
+  return dynamicContent;
+}
+
+// Get current function ID
+function getCurrentFunctionId() {
+  try {
+    const address = document.getElementById('function-address').textContent;
+    if (address && address !== '0x0') {
+      // Remove '0x' prefix if present and convert to lowercase
+      return address.replace('0x', '').toLowerCase();
+    }
+  } catch (error) {
+    console.warn('[Chat] Could not get function address:', error);
+  }
+  return null;
+}
+
 // Send a message
 export async function sendMessage() {
   const chatInput = document.getElementById('chat-input');
@@ -165,184 +203,14 @@ export async function sendMessage() {
   chatInput.value = '';
 
   try {
-    // Get current function context
-    const functionName = document.getElementById('function-name').textContent;
-    const pseudocode = document.getElementById('toggle-pseudocode').checked ? state.monacoEditor.getValue() : '';
-    const address = document.getElementById('function-address').textContent;
-
-    // Initialize context object with required fields
-    const context = {
-      functionName: functionName,
-      address: address
-    };
-
-    // Store toggle states locally to determine what to include
-    const toggleStates = {};
-    const toggles = document.querySelectorAll('.toggle-label input[type="checkbox"]');
-    console.log('[Chat] Context toggles:', Array.from(toggles).map(t => `${t.id}: ${t.checked}`));
-    toggles.forEach(toggle => {
-      const name = toggle.id.replace('toggle-', '');
-      toggleStates[name] = toggle.checked;
-      // Don't add toggle states to context sent to AI
-    });
-
-    // Try to get binary name and function ID for notes and tags
-    let localFunctionId = null;
-    try {
-      const { getCurrentContext } = await import('./TagNotePanel.js');
-      const { binaryName, functionId } = getCurrentContext();
-      if (binaryName && functionId) {
-        console.log(`[Chat] Found binary and function ID: ${binaryName}/${functionId}`);
-        // Include binary name but not function ID in the context sent to AI
-        context.binaryName = binaryName;
-        // Store function ID locally for backend calls but don't include in context
-        localFunctionId = functionId;
-        
-        // Explicitly fetch tags with forAiContext flag
-        try {
-          const tagsResponse = await fetch(`http://localhost:8000/api/tags/${binaryName}/${functionId}`);
-          if (tagsResponse.ok) {
-            const tagsData = await tagsResponse.json();
-            console.log(`[Chat] Fetched ${tagsData.tags.length} tags for ${binaryName}/${functionId}`, tagsData.tags);
-            
-            // Filter for tags with includeInAI flag (matching what's in TagsPanel.js)
-            const aiContextTags = tagsData.tags.filter(tag => tag.includeInAI === true);
-            if (aiContextTags.length > 0) {
-              console.log(`[Chat] Found ${aiContextTags.length} tags with includeInAI=true`, aiContextTags);
-              // Only include type and value fields for tags
-              context.tags = aiContextTags.map(tag => ({
-                type: tag.type,
-                value: tag.value
-              }));
-            } else {
-              console.log('[Chat] No tags found with includeInAI=true');
-            }
-          } else {
-            console.error('[Chat] Failed to fetch tags:', tagsResponse.status);
-          }
-        } catch (tagError) {
-          console.error('[Chat] Error fetching tags:', tagError);
-        }
-      }
-    } catch (error) {
-      console.log('[Chat] Could not get binary/function context:', error);
-    }
-
-    // Add pseudocode if enabled
-    if (toggleStates.pseudocode) {
-      context.pseudocode = pseudocode;
-    }
-
-    // Add assembly if enabled
-    if (toggleStates.assembly) {
-      const assemblyTable = document.querySelector('#assembly-table tbody');
-      context.assembly = Array.from(assemblyTable.querySelectorAll('tr')).map(row => {
-        const cells = row.querySelectorAll('td');
-        return {
-          address: cells[0].textContent,
-          offset: cells[1].textContent,
-          bytes: cells[2].textContent,
-          mnemonic: cells[3].textContent,
-          operands: cells[4].textContent
-        };
-      });
-    }
-
-    // Add variables if enabled
-    if (toggleStates.variables) {
-      const variablesTable = document.querySelector('#variables-table tbody');
-      context.variables = Array.from(variablesTable.querySelectorAll('tr')).map(row => {
-        const cells = row.querySelectorAll('td');
-        return {
-          name: cells[0].textContent,
-          type: cells[1].textContent,
-          size: cells[2].textContent,
-          offset: cells[3].textContent
-        };
-      });
-    }
-
-    // Add xrefs if enabled
-    if (toggleStates.xrefs) {
-      const incomingXrefs = Array.from(document.querySelector('#incoming-xrefs-table tbody').querySelectorAll('tr')).map(row => {
-        const cells = row.querySelectorAll('td');
-        return {
-          name: cells[0].textContent,
-          address: cells[1].textContent,
-          offset: cells[2].textContent,
-          context: cells[3].textContent
-        };
-      });
-
-      const outgoingXrefs = Array.from(document.querySelector('#outgoing-xrefs-table tbody').querySelectorAll('tr')).map(row => {
-        const cells = row.querySelectorAll('td');
-        return {
-          name: cells[0].textContent,
-          address: cells[1].textContent,
-          offset: cells[2].textContent,
-          context: cells[3].textContent
-        };
-      });
-
-      context.xrefs = {
-        incoming: incomingXrefs,
-        outgoing: outgoingXrefs
-      };
-    }
-
-    // Add strings if enabled
-    if (toggleStates.strings) {
-      const stringsTable = document.querySelector('#strings-table tbody');
-      context.strings = Array.from(stringsTable.querySelectorAll('tr')).map(row => {
-        const cells = row.querySelectorAll('td');
-        return {
-          address: cells[0].textContent,
-          value: cells[1].textContent,
-          type: cells[2].textContent
-        };
-      });
-    }
-
-    // Add CFG if enabled - with debug logging
-    console.log('[Chat] Debug - functionName:', functionName);
-    console.log('[Chat] Debug - global currentFunction:', state.currentFunction);
-    console.log('[Chat] Debug - CFG available:', state.currentFunction && state.currentFunction.cfg ? 'Yes' : 'No');
-    if (toggleStates.cfg && state.currentFunction && state.currentFunction.cfg) {
-      console.log('[Chat] Adding CFG data to context');
-      context.cfg = {
-        nodes: state.currentFunction.cfg.nodes.map(node => ({
-          id: node.id,
-          address: node.start_address,
-          endAddress: node.end_address,
-          instructions: node.instructions.slice(0, 5) // Limit to first 5 instructions to keep context size manageable
-        })),
-        edges: state.currentFunction.cfg.edges
-      };
-    } else {
-      console.log('[Chat] CFG toggle:', toggleStates.cfg);
-      console.log('[Chat] global currentFunction exists:', !!state.currentFunction);
-      console.log('[Chat] currentFunction.cfg exists:', !!(state.currentFunction && state.currentFunction.cfg));
-    }
+    // Get toggle states and dynamic content
+    const toggleStates = getToggleStates();
+    const dynamicContent = getDynamicContent(toggleStates);
+    const functionId = getCurrentFunctionId();
     
-    // Add notes if enabled
-    if (toggleStates.notes && localFunctionId) {
-      try {
-        const { binaryName } = context;
-        if (binaryName && localFunctionId) {
-          // Fetch the note from the backend
-          const response = await fetch(`http://localhost:8000/api/notes/${binaryName}/${localFunctionId}`);
-          if (response.ok) {
-            const data = await response.json();
-            context.notes = data.content || '';
-            console.log('[Chat] Added notes to context');
-          }
-        }
-      } catch (error) {
-        console.error('[Chat] Error fetching notes for context:', error);
-      }
-    }
-
-    // AI Context tags were fetched earlier
+    console.log('[Chat] Function ID:', functionId);
+    console.log('[Chat] Toggle states:', toggleStates);
+    console.log('[Chat] Dynamic content keys:', Object.keys(dynamicContent));
 
     // Create a temporary message div for the generating state
     const chatMessages = document.getElementById('chat-messages');
@@ -377,21 +245,20 @@ export async function sendMessage() {
     };
     window.addEventListener('chat-chunk', chunkHandler);
 
-    // Send to backend
+    // Send simplified request to backend
     console.log('[Chat] Sending request to backend...');
     const response = await window.electronAPI.sendChatMessage({
       message,
-      context,
-      session_id: state.currentSessionId
+      session_id: state.currentSessionId,
+      toggle_states: toggleStates,
+      dynamic_content: dynamicContent,
+      function_id: functionId
     });
 
     // Remove the chunk handler
     window.removeEventListener('chat-chunk', chunkHandler);
 
     console.log('[Chat] Received response from backend:', response);
-    console.log('[Chat] Response type:', typeof response);
-    console.log('[Chat] Response has reply:', !!response?.reply);
-    console.log('[Chat] Response keys:', response ? Object.keys(response) : 'null');
 
     if (!response) {
       console.error('[Chat] No response received from backend');
@@ -404,12 +271,9 @@ export async function sendMessage() {
     }
 
     if (response.reply === '' || response.reply == null) {
-      console.error('[Chat] Backend returned empty reply - this usually means:');
-      console.error('[Chat] 1. OpenAI API key is not configured');
-      console.error('[Chat] 2. There was an error during the API call');
-      console.error('[Chat] 3. The backend service encountered an error');
+      console.error('[Chat] Backend returned empty reply');
       addMessage('⚠️ The AI assistant returned an empty response. This usually means the OpenAI API key is not configured or there was an error during the API call. Please check the backend logs.', false);
-      return; // Don't throw error, just show message and return
+      return;
     }
 
     // Update current session ID if it's a new session
@@ -534,4 +398,148 @@ export function setupContextToggles() {
       }
     });
   });
+}
+
+// Function to send current function context to backend for caching
+export async function cacheCurrentFunctionContext() {
+  try {
+    const functionId = getCurrentFunctionId();
+    if (!functionId) {
+      console.log('[Chat] No function ID available for caching');
+      return;
+    }
+
+    // Get function name and address
+    const functionName = document.getElementById('function-name').textContent || 'Unknown Function';
+    const address = document.getElementById('function-address').textContent || '0x0';
+    
+    // Get binary name if available
+    let binaryName = '';
+    try {
+      const { getCurrentContext } = await import('./TagNotePanel.js');
+      const { binaryName: currentBinaryName } = getCurrentContext();
+      binaryName = currentBinaryName || '';
+    } catch (error) {
+      console.log('[Chat] Could not get binary name:', error);
+    }
+
+    // Collect all the context data from DOM tables
+    const contextData = {
+      function_name: functionName,
+      address: address,
+      binary_name: binaryName,
+      pseudocode: state.monacoEditor ? state.monacoEditor.getValue() : '',
+      assembly: [],
+      variables: [],
+      xrefs: { incoming: [], outgoing: [] },
+      strings: [],
+      cfg: state.currentFunction?.cfg || {}
+    };
+
+    // Collect assembly data
+    try {
+      const assemblyTable = document.querySelector('#assembly-table tbody');
+      if (assemblyTable) {
+        contextData.assembly = Array.from(assemblyTable.querySelectorAll('tr')).map(row => {
+          const cells = row.querySelectorAll('td');
+          return {
+            address: cells[0]?.textContent || '',
+            offset: cells[1]?.textContent || '',
+            bytes: cells[2]?.textContent || '',
+            mnemonic: cells[3]?.textContent || '',
+            operands: cells[4]?.textContent || ''
+          };
+        });
+      }
+    } catch (error) {
+      console.warn('[Chat] Error collecting assembly data:', error);
+    }
+
+    // Collect variables data
+    try {
+      const variablesTable = document.querySelector('#variables-table tbody');
+      if (variablesTable) {
+        contextData.variables = Array.from(variablesTable.querySelectorAll('tr')).map(row => {
+          const cells = row.querySelectorAll('td');
+          return {
+            name: cells[0]?.textContent || '',
+            type: cells[1]?.textContent || '',
+            size: cells[2]?.textContent || '',
+            offset: cells[3]?.textContent || ''
+          };
+        });
+      }
+    } catch (error) {
+      console.warn('[Chat] Error collecting variables data:', error);
+    }
+
+    // Collect xrefs data
+    try {
+      const incomingXrefsTable = document.querySelector('#incoming-xrefs-table tbody');
+      if (incomingXrefsTable) {
+        contextData.xrefs.incoming = Array.from(incomingXrefsTable.querySelectorAll('tr')).map(row => {
+          const cells = row.querySelectorAll('td');
+          return {
+            name: cells[0]?.textContent || '',
+            address: cells[1]?.textContent || '',
+            offset: cells[2]?.textContent || '',
+            context: cells[3]?.textContent || ''
+          };
+        });
+      }
+
+      const outgoingXrefsTable = document.querySelector('#outgoing-xrefs-table tbody');
+      if (outgoingXrefsTable) {
+        contextData.xrefs.outgoing = Array.from(outgoingXrefsTable.querySelectorAll('tr')).map(row => {
+          const cells = row.querySelectorAll('td');
+          return {
+            name: cells[0]?.textContent || '',
+            address: cells[1]?.textContent || '',
+            offset: cells[2]?.textContent || '',
+            context: cells[3]?.textContent || ''
+          };
+        });
+      }
+    } catch (error) {
+      console.warn('[Chat] Error collecting xrefs data:', error);
+    }
+
+    // Collect strings data
+    try {
+      const stringsTable = document.querySelector('#strings-table tbody');
+      if (stringsTable) {
+        contextData.strings = Array.from(stringsTable.querySelectorAll('tr')).map(row => {
+          const cells = row.querySelectorAll('td');
+          return {
+            address: cells[0]?.textContent || '',
+            value: cells[1]?.textContent || '',
+            type: cells[2]?.textContent || ''
+          };
+        });
+      }
+    } catch (error) {
+      console.warn('[Chat] Error collecting strings data:', error);
+    }
+
+    // Send to backend for caching
+    const response = await fetch('http://localhost:8000/api/chat/context', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        function_id: functionId,
+        data: contextData
+      })
+    });
+
+    if (response.ok) {
+      console.log(`[Chat] Cached context for function ${functionId}`);
+    } else {
+      console.error('[Chat] Failed to cache function context:', response.status);
+    }
+
+  } catch (error) {
+    console.error('[Chat] Error caching function context:', error);
+  }
 } 

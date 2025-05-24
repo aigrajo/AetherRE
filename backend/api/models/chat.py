@@ -5,8 +5,10 @@ from pydantic import BaseModel
 # Pydantic models for request/response
 class ChatRequest(BaseModel):
     message: str
-    context: Dict[str, Any]
     session_id: Optional[str] = None
+    toggle_states: Dict[str, bool] = {}
+    dynamic_content: Optional[Dict[str, Any]] = None
+    function_id: Optional[str] = None  # For associating session with function
 
 class ChatResponse(BaseModel):
     reply: str
@@ -26,6 +28,15 @@ class SessionListResponse(BaseModel):
 class SessionResponse(BaseModel):
     status: str
     session_id: Optional[str] = None
+
+class FunctionContextRequest(BaseModel):
+    function_id: str
+    data: Dict[str, Any]
+
+class ErrorResponse(BaseModel):
+    error_type: str
+    message: str
+    suggestions: List[str] = []
 
 # XRef models for binary analysis
 class XRefType:

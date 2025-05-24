@@ -8,7 +8,10 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from typing import Dict, Any, Optional
 
-from backend.api.models.chat import ChatRequest, ChatResponse, SessionResponse, SessionListResponse
+from backend.api.models.chat import (
+    ChatRequest, ChatResponse, SessionResponse, SessionListResponse, 
+    FunctionContextRequest, ErrorResponse
+)
 from backend.services.chat import (
     stream_chat_response, 
     create_new_session, 
@@ -18,9 +21,10 @@ from backend.services.chat import (
     chat_sessions,
     ChatSession
 )
+from backend.services.function_context import function_context_service
+from backend.services.session_manager import session_manager
 from backend.config.settings import DATA_DIR, GHIDRA_HEADLESS_SCRIPT
 from backend.utils.helpers import analyze_xrefs
-from backend.services.notes_service import get_note, get_tags
 
 router = APIRouter(prefix="/api/chat")
 
@@ -29,139 +33,231 @@ async def chat_endpoint(request: ChatRequest):
     """Chat endpoint for sending messages to the AI assistant."""
     try:
         print(f"[Chat API] Received request: {request.message}", file=sys.stderr)
+        print(f"[Chat API] Toggle states: {request.toggle_states}", file=sys.stderr)
+        print(f"[Chat API] Session ID: {request.session_id}", file=sys.stderr)
+        print(f"[Chat API] Function ID: {request.function_id}", file=sys.stderr)
         
-        # Get function and context information from the request
-        function_name = request.context.get('functionName', 'Unknown Function')
-        binary_name = None
-        function_id = None
-        
-        # Log toggle states
-        toggles = {k: v for k, v in request.context.items() if k.startswith('toggle_')}
-        print(f"[Chat API] Toggle states: {toggles}", file=sys.stderr)
-        
-        # Check if we have direct binary name and function ID from context
-        binary_name = request.context.get('binaryName')
-        function_id = request.context.get('functionId')
-        
-        if binary_name and function_id:
-            print(f"[Chat API] Using binary/function from context: {binary_name}/{function_id}", file=sys.stderr)
-        else:
-            # Check if address is present in context
-            function_address = request.context.get('address')
-            if function_address:
-                # Remove '0x' prefix if present and convert to lowercase
-                function_id = function_address.replace('0x', '').lower()
-                print(f"[Chat API] Using function ID from address: {function_id}", file=sys.stderr)
-                
-                # For binary name, derive from function name or address
-                binary_name = request.context.get('binaryName')
-                if not binary_name and function_name:
-                    # Try to extract binary name from function name if it has format like "binary_name::function_name"
-                    if '::' in function_name:
-                        binary_name = function_name.split('::')[0]
-                        print(f"[Chat API] Extracted binary name from function name: {binary_name}", file=sys.stderr)
-                
-                if not binary_name and function_id:
-                    # Use a default binary name based on the first part of the function ID
-                    binary_name = f"binary_{function_id[:8]}"
-                    print(f"[Chat API] Using default binary name: {binary_name}", file=sys.stderr)
-                
-                # Clean binary name to ensure proper filesystem compatibility
-                if binary_name:
-                    binary_name = ''.join(c if c.isalnum() else '_' for c in binary_name)
-                    print(f"[Chat API] Cleaned binary name: {binary_name}", file=sys.stderr)
-        
-        # Check if notes toggle is enabled
-        if request.context.get('toggle_notes') == True:
-            print(f"[Chat API] Notes toggle is enabled", file=sys.stderr)
-            # Only attempt to get notes if we have binary name and function ID
-            if binary_name and function_id:
-                # No need to add notes again if already included
-                if request.context.get('notes') is None:
-                    try:
-                        note_content = get_note(binary_name, function_id)
-                        if note_content:
-                            request.context['notes'] = note_content
-                            print(f"[Chat API] Added notes for {binary_name}/{function_id}: {note_content[:50]}...", file=sys.stderr)
-                        else:
-                            print(f"[Chat API] No notes found for {binary_name}/{function_id}", file=sys.stderr)
-                    except Exception as e:
-                        print(f"[Chat API] Error getting notes: {str(e)}", file=sys.stderr)
-                else:
-                    print(f"[Chat API] Notes already included in context", file=sys.stderr)
-            else:
-                print(f"[Chat API] Missing binary name or function ID for notes", file=sys.stderr)
-        else:
-            print(f"[Chat API] Notes toggle is disabled", file=sys.stderr)
-        
-        # Always check for AI context tags (no toggle needed)
-        print(f"[Chat API] Checking for AI context tags", file=sys.stderr)
-        if binary_name and function_id:
-            try:
-                tags = get_tags(binary_name, function_id)
-                print(f"[Chat API] Found {len(tags)} tags for {binary_name}/{function_id}", file=sys.stderr)
-                # Only include tags marked for AI context
-                ai_context_tags = [tag for tag in tags if tag.get('includeInAI')]
-                if ai_context_tags:
-                    # Only include type and value fields
-                    request.context['tags'] = [{'type': tag['type'], 'value': tag['value']} for tag in ai_context_tags]
-                    print(f"[Chat API] Added {len(ai_context_tags)} AI context tags", file=sys.stderr)
-                else:
-                    print(f"[Chat API] No tags with includeInAI flag found", file=sys.stderr)
-            except Exception as e:
-                print(f"[Chat API] Error getting tags: {str(e)}", file=sys.stderr)
-        else:
-            print(f"[Chat API] Missing binary name or function ID for tags", file=sys.stderr)
-        
-        # Get active context toggles
-        active_context = []
-        for key, value in request.context.items():
-            if key.startswith('toggle_') and value:
-                active_context.append(key.replace('toggle_', ''))
-        
-        # Create or get session
-        if request.session_id not in chat_sessions:
-            chat_sessions[request.session_id] = ChatSession(request.session_id)
+        # Use the simplified streaming response with new services
+        async def generate():
+            async for chunk in stream_chat_response(
+                message=request.message,
+                session_id=request.session_id,
+                toggle_states=request.toggle_states,
+                dynamic_content=request.dynamic_content,
+                function_id=request.function_id
+            ):
+                yield chunk
             
-        # Set function and context information
-        chat_sessions[request.session_id].function_name = function_name
-        chat_sessions[request.session_id].active_context = active_context
+            # Send completion marker
+            yield "data: [DONE]\n\n"
         
-        return StreamingResponse(
-            stream_chat_response(request.message, request.context, request.session_id),
-            media_type="text/event-stream"
-        )
+        return StreamingResponse(generate(), media_type="text/plain")
+        
     except Exception as e:
-        print(f"[Chat API] Error handling request: {str(e)}", file=sys.stderr)
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"[Chat API] Error in chat endpoint: {str(e)}", file=sys.stderr)
+        error_response = ErrorResponse(
+            error_type="internal_error",
+            message=f"An error occurred while processing your request: {str(e)}",
+            suggestions=["Please try again", "Check backend logs for details"]
+        )
+        raise HTTPException(status_code=500, detail=error_response.dict())
+
+@router.post("/context")
+async def set_function_context(request: FunctionContextRequest):
+    """Set the context data for a function."""
+    try:
+        print(f"[Chat API] Setting context for function: {request.function_id}", file=sys.stderr)
+        
+        function_context_service.set_current_function(request.function_id, request.data)
+        
+        return {"status": "success", "message": f"Context set for function {request.function_id}"}
+        
+    except Exception as e:
+        print(f"[Chat API] Error setting function context: {str(e)}", file=sys.stderr)
+        error_response = ErrorResponse(
+            error_type="context_error",
+            message=f"Failed to set function context: {str(e)}",
+            suggestions=["Verify function data format", "Check backend logs"]
+        )
+        raise HTTPException(status_code=500, detail=error_response.dict())
+
+@router.get("/context/{function_id}")
+async def get_function_context(function_id: str):
+    """Get available context for a function."""
+    try:
+        if function_id not in function_context_service.current_function_data:
+            raise HTTPException(status_code=404, detail="Function context not found")
+        
+        data = function_context_service.current_function_data[function_id]
+        
+        # Return summary information about available context
+        context_summary = {
+            "function_id": function_id,
+            "function_name": data.get('function_name'),
+            "address": data.get('address'),
+            "binary_name": data.get('binary_name'),
+            "available_data": {
+                "assembly": len(data.get('assembly', [])),
+                "variables": len(data.get('variables', [])),
+                "strings": len(data.get('strings', [])),
+                "xrefs_incoming": len(data.get('xrefs', {}).get('incoming', [])),
+                "xrefs_outgoing": len(data.get('xrefs', {}).get('outgoing', [])),
+                "cfg_nodes": len(data.get('cfg', {}).get('nodes', [])),
+                "cfg_edges": len(data.get('cfg', {}).get('edges', [])),
+                "has_pseudocode": bool(data.get('pseudocode', '')),
+            },
+            "cached_at": data.get('cached_at')
+        }
+        
+        return context_summary
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Chat API] Error getting function context: {str(e)}", file=sys.stderr)
+        error_response = ErrorResponse(
+            error_type="context_error",
+            message=f"Failed to get function context: {str(e)}",
+            suggestions=["Verify function exists", "Check backend logs"]
+        )
+        raise HTTPException(status_code=500, detail=error_response.dict())
 
 @router.post("/new")
 async def new_chat():
     """Create a new chat session."""
-    # Don't create a session immediately, just return a temporary ID
-    # The actual session will be created when the first message is sent
-    temp_id = create_new_session()
-    return SessionResponse(status="success", session_id=temp_id)
+    try:
+        temp_id = create_new_session()
+        session_manager.set_current_session(temp_id)
+        return SessionResponse(status="success", session_id=temp_id)
+    except Exception as e:
+        print(f"[Chat API] Error creating new chat: {str(e)}", file=sys.stderr)
+        error_response = ErrorResponse(
+            error_type="session_error",
+            message=f"Failed to create new chat session: {str(e)}",
+            suggestions=["Try again", "Check backend logs"]
+        )
+        raise HTTPException(status_code=500, detail=error_response.dict())
 
 @router.post("/{session_id}/clear")
 async def clear_chat(session_id: str):
     """Clear a chat session's history."""
-    if clear_session(session_id):
-        return SessionResponse(status="success")
-    raise HTTPException(status_code=404, detail="Chat session not found")
+    try:
+        if clear_session(session_id):
+            return SessionResponse(status="success")
+        raise HTTPException(status_code=404, detail="Chat session not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Chat API] Error clearing chat: {str(e)}", file=sys.stderr)
+        error_response = ErrorResponse(
+            error_type="session_error",
+            message=f"Failed to clear chat session: {str(e)}",
+            suggestions=["Verify session exists", "Try again"]
+        )
+        raise HTTPException(status_code=500, detail=error_response.dict())
 
-@router.delete("/{session_id}")
+@router.delete("/sessions/{session_id}")
 async def delete_chat(session_id: str):
     """Delete a chat session."""
-    if delete_session(session_id):
-        return SessionResponse(status="success")
-    raise HTTPException(status_code=404, detail="Chat session not found")
+    try:
+        if delete_session(session_id):
+            session_manager.clear_session_associations(session_id)
+            return SessionResponse(status="success")
+        raise HTTPException(status_code=404, detail="Chat session not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Chat API] Error deleting chat: {str(e)}", file=sys.stderr)
+        error_response = ErrorResponse(
+            error_type="session_error",
+            message=f"Failed to delete chat session: {str(e)}",
+            suggestions=["Verify session exists", "Try again"]
+        )
+        raise HTTPException(status_code=500, detail=error_response.dict())
 
 @router.get("/sessions")
 async def list_sessions():
     """List all active chat sessions."""
-    sessions = get_all_sessions()
-    return SessionListResponse(sessions=sessions)
+    try:
+        sessions = get_all_sessions()
+        return SessionListResponse(sessions=sessions)
+    except Exception as e:
+        print(f"[Chat API] Error listing sessions: {str(e)}", file=sys.stderr)
+        error_response = ErrorResponse(
+            error_type="session_error",
+            message=f"Failed to list chat sessions: {str(e)}",
+            suggestions=["Try again", "Check backend logs"]
+        )
+        raise HTTPException(status_code=500, detail=error_response.dict())
+
+@router.get("/current")
+async def get_current_session():
+    """Get the current active session."""
+    try:
+        current_session_id = session_manager.get_current_session()
+        if current_session_id:
+            return {"session_id": current_session_id, "status": "active"}
+        else:
+            return {"session_id": None, "status": "none"}
+    except Exception as e:
+        print(f"[Chat API] Error getting current session: {str(e)}", file=sys.stderr)
+        error_response = ErrorResponse(
+            error_type="session_error",
+            message=f"Failed to get current session: {str(e)}",
+            suggestions=["Try again", "Check backend logs"]
+        )
+        raise HTTPException(status_code=500, detail=error_response.dict())
+
+@router.post("/restore")
+async def restore_chat_session(request: dict):
+    """Restore a chat session from project data."""
+    try:
+        session_id = request.get('session_id')
+        name = request.get('name')
+        created_at = request.get('created_at')
+        last_activity = request.get('last_activity')
+        messages = request.get('messages', [])
+        
+        if not session_id:
+            raise HTTPException(status_code=400, detail="Session ID is required")
+        
+        # Create a new ChatSession object with the restored data
+        from datetime import datetime
+        
+        restored_session = ChatSession(session_id=session_id)
+        
+        # Set the name separately since constructor doesn't accept it
+        restored_session.name = name or f"Restored Chat {session_id[:8]}"
+        
+        # Restore the timestamps
+        if created_at:
+            try:
+                restored_session.created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+            except ValueError:
+                pass  # Use default if parsing fails
+                
+        if last_activity:
+            try:
+                restored_session.last_activity = datetime.fromisoformat(last_activity.replace('Z', '+00:00'))
+            except ValueError:
+                pass  # Use default if parsing fails
+        
+        # Restore the messages
+        restored_session.messages = messages
+        
+        # Add to the global sessions dictionary
+        chat_sessions[session_id] = restored_session
+        
+        return {"status": "success", "message": f"Session {session_id} restored successfully"}
+        
+    except Exception as e:
+        print(f"Error restoring chat session: {e}")
+        error_response = ErrorResponse(
+            error_type="restore_error",
+            message=f"Failed to restore chat session: {str(e)}",
+            suggestions=["Verify session data format", "Try again"]
+        )
+        raise HTTPException(status_code=500, detail=error_response.dict())
 
 # Binary analysis endpoints
 @router.post("/analyze")
@@ -301,50 +397,4 @@ async def analyze_json(json_data: str):
             
         return {"type": "analysis_complete", "data": result}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/restore")
-async def restore_chat_session(request: dict):
-    """Restore a chat session from project data."""
-    try:
-        session_id = request.get('session_id')
-        name = request.get('name')
-        created_at = request.get('created_at')
-        last_activity = request.get('last_activity')
-        messages = request.get('messages', [])
-        
-        if not session_id:
-            raise HTTPException(status_code=400, detail="Session ID is required")
-        
-        # Create a new ChatSession object with the restored data
-        from datetime import datetime
-        
-        restored_session = ChatSession(session_id=session_id)
-        
-        # Set the name separately since constructor doesn't accept it
-        restored_session.name = name or f"Restored Chat {session_id[:8]}"
-        
-        # Restore the timestamps
-        if created_at:
-            try:
-                restored_session.created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-            except ValueError:
-                pass  # Use default if parsing fails
-                
-        if last_activity:
-            try:
-                restored_session.last_activity = datetime.fromisoformat(last_activity.replace('Z', '+00:00'))
-            except ValueError:
-                pass  # Use default if parsing fails
-        
-        # Restore the messages
-        restored_session.messages = messages
-        
-        # Add to the global sessions dictionary
-        chat_sessions[session_id] = restored_session
-        
-        return {"status": "success", "message": f"Session {session_id} restored successfully"}
-        
-    except Exception as e:
-        print(f"Error restoring chat session: {e}")
         raise HTTPException(status_code=500, detail=str(e)) 
