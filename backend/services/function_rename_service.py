@@ -96,6 +96,11 @@ class FunctionRenameService:
                 new_name
             )
             
+            # Verify that function list was actually updated
+            function_list_updated = FunctionRenameService._verify_function_list_update(
+                functions_data, updated_functions_data, old_name, new_name, function_id
+            )
+            
             # 6. Create new state snapshot
             new_state = FunctionRenameService._create_state_snapshot(
                 updated_current_function, updated_functions_data, new_name
@@ -107,7 +112,7 @@ class FunctionRenameService:
                     session_id, operation_id, old_state, new_state, function_id
                 )
             
-            logger.info(f"Function rename completed successfully: '{old_name}' -> '{new_name}'")
+            logger.info(f"Function rename completed successfully: '{old_name}' -> '{new_name}' (list updated: {function_list_updated})")
             
             return {
                 'success': True,
@@ -117,7 +122,8 @@ class FunctionRenameService:
                 'changes': {
                     'function_name': {'old': old_name, 'new': new_name},
                     'pseudocode_updated': updated_pseudocode != current_function.get('pseudocode', ''),
-                    'functions_data_updated': updated_functions_data != functions_data
+                    'functions_data_updated': updated_functions_data != functions_data,
+                    'function_list_updated': function_list_updated
                 }
             }
             
@@ -190,21 +196,100 @@ class FunctionRenameService:
         
         if 'functions' in updated_data:
             updated_functions = []
+            function_found = False
+            
             for func in updated_data['functions']:
                 func_copy = func.copy()
                 
-                # Update the function being renamed
-                if str(func_copy.get('address', '')) == str(function_id) or func_copy.get('name') == old_name:
+                # More robust function identification
+                func_address = func_copy.get('address')
+                func_id = func_copy.get('id')
+                func_name = func_copy.get('name')
+                
+                # Check for match using multiple criteria
+                is_target_function = False
+                
+                # Primary: Match by ID/address (only if function_id is not None/empty)
+                if function_id and str(function_id).strip():
+                    if (func_address and str(func_address) == str(function_id)) or \
+                       (func_id and str(func_id) == str(function_id)):
+                        is_target_function = True
+                        logger.debug(f"Function found by ID/address: {function_id}")
+                
+                # Secondary: Match by name if ID match fails and names match exactly
+                elif not function_found and func_name == old_name:
+                    is_target_function = True
+                    logger.debug(f"Function found by name: {old_name}")
+                
+                if is_target_function:
                     # Set original name for tracking if not already set
                     if not func_copy.get('originalName'):
                         func_copy['originalName'] = old_name
                     func_copy['name'] = new_name
+                    function_found = True
+                    logger.info(f"Updated function in list: '{old_name}' -> '{new_name}' (ID: {function_id})")
                 
                 updated_functions.append(func_copy)
             
             updated_data['functions'] = updated_functions
+            
+            if not function_found:
+                logger.warning(f"Function not found in functions list for update: {old_name} (ID: {function_id})")
         
         return updated_data
+    
+    @staticmethod
+    def _verify_function_list_update(
+        original_functions_data: Dict[str, Any],
+        updated_functions_data: Dict[str, Any], 
+        old_name: str,
+        new_name: str,
+        function_id: str
+    ) -> bool:
+        """
+        Verify that the function list was properly updated with the new name.
+        
+        Args:
+            original_functions_data: Original functions data
+            updated_functions_data: Updated functions data
+            old_name: Old function name
+            new_name: New function name
+            function_id: Function identifier
+            
+        Returns:
+            True if function list was successfully updated, False otherwise
+        """
+        if not updated_functions_data or 'functions' not in updated_functions_data:
+            logger.warning("No functions list found in updated data")
+            return False
+        
+        # Check if any function in the updated list has the new name and matches our function
+        for func in updated_functions_data['functions']:
+            func_address = func.get('address')
+            func_id = func.get('id')
+            func_name = func.get('name')
+            
+            # If this function matches our ID and has the new name, update succeeded
+            if function_id and str(function_id).strip():
+                if ((func_address and str(func_address) == str(function_id)) or 
+                    (func_id and str(func_id) == str(function_id))) and func_name == new_name:
+                    logger.debug(f"Verified function list update: found '{new_name}' with ID {function_id}")
+                    return True
+        
+        # Also check if the old name is no longer present (for functions without reliable IDs)
+        old_name_count = sum(1 for func in updated_functions_data['functions'] if func.get('name') == old_name)
+        original_old_name_count = 0
+        if original_functions_data and 'functions' in original_functions_data:
+            original_old_name_count = sum(1 for func in original_functions_data['functions'] if func.get('name') == old_name)
+        
+        # If old name count decreased and new name is present, likely successful
+        new_name_present = any(func.get('name') == new_name for func in updated_functions_data['functions'])
+        if old_name_count < original_old_name_count and new_name_present:
+            logger.debug(f"Verified function list update: old name count decreased and new name present")
+            return True
+        
+        logger.warning(f"Could not verify function list update for '{old_name}' -> '{new_name}' (ID: {function_id})")
+        return False
     
     @staticmethod
     def _create_state_snapshot(

@@ -7,6 +7,8 @@ Handles all project logic that was previously on the frontend.
 import os
 import json
 import hashlib
+import re
+import aiohttp
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
@@ -50,7 +52,6 @@ class ProjectService:
         Returns:
             Cleaned binary name
         """
-        import re
         return re.sub(r'[^\w\d]', '_', name)
     
     @staticmethod
@@ -446,4 +447,302 @@ class ProjectService:
                         variable['name'] = custom_name
                         applied_count += 1
         
-        return applied_count 
+        return applied_count
+    
+    @staticmethod
+    async def apply_complete_project(
+        functions_data: Dict,
+        project_data: Dict,
+        binary_path: str,
+        binary_name: str
+    ) -> Tuple[Dict, Dict]:
+        """
+        Apply all project customizations in a single atomic operation.
+        Handles function names, variable names, pseudocode updates, notes, tags, and chat sessions.
+        
+        Args:
+            functions_data: Functions data structure to modify
+            project_data: Complete project data from file
+            binary_path: Path to the binary file
+            binary_name: Name of the binary file
+            
+        Returns:
+            Tuple of (updated_functions_data, application_results)
+        """
+        print("=== Starting Complete Project Application ===")
+        
+        # Verify compatibility first
+        is_compatible, error_msg = ProjectService.verify_project_compatibility(project_data, binary_path)
+        if not is_compatible:
+            raise Exception(error_msg)
+        
+        # Initialize results tracking
+        results = {
+            "functions_applied": 0,
+            "variables_applied": 0,
+            "notes_applied": 0,
+            "tags_applied": 0,
+            "chat_sessions_restored": 0,
+            "pseudocode_updated": 0,
+            "success": True,
+            "details": {}
+        }
+        
+        customizations = project_data.get('customizations', {})
+        
+        # Apply function names and update pseudocode
+        if customizations.get('function_names'):
+            print(f"Applying {len(customizations['function_names'])} custom function names...")
+            functions_applied, pseudocode_updated = ProjectService._apply_function_names_with_pseudocode(
+                functions_data, customizations['function_names']
+            )
+            results["functions_applied"] = functions_applied
+            results["pseudocode_updated"] += pseudocode_updated
+            results["details"]["function_names"] = f"Applied {functions_applied} function names, updated {pseudocode_updated} pseudocode blocks"
+        
+        # Apply variable names and update pseudocode
+        if customizations.get('variable_names'):
+            print(f"Applying variable names for {len(customizations['variable_names'])} functions...")
+            variables_applied, pseudocode_updated = ProjectService._apply_variable_names_with_pseudocode(
+                functions_data, customizations['variable_names']
+            )
+            results["variables_applied"] = variables_applied
+            results["pseudocode_updated"] += pseudocode_updated
+            results["details"]["variable_names"] = f"Applied {variables_applied} variable names, updated {pseudocode_updated} pseudocode blocks"
+        
+        # Apply notes
+        if customizations.get('notes'):
+            print(f"Applying {len(customizations['notes'])} function notes...")
+            notes_applied = await ProjectService._apply_notes(
+                customizations['notes'], binary_name
+            )
+            results["notes_applied"] = notes_applied
+            results["details"]["notes"] = f"Applied {notes_applied} notes"
+        
+        # Apply tags
+        if customizations.get('tags'):
+            print(f"Applying tags for {len(customizations['tags'])} functions...")
+            tags_applied = await ProjectService._apply_tags(
+                customizations['tags'], binary_name
+            )
+            results["tags_applied"] = tags_applied
+            results["details"]["tags"] = f"Applied tags for {tags_applied} functions"
+        
+        # Restore chat sessions
+        chat_history = project_data.get('chat_history', {})
+        if chat_history.get('sessions'):
+            print(f"Restoring {len(chat_history['sessions'])} chat sessions...")
+            sessions_restored = await ProjectService._restore_chat_sessions(
+                chat_history['sessions']
+            )
+            results["chat_sessions_restored"] = sessions_restored
+            results["details"]["chat_sessions"] = f"Restored {sessions_restored} chat sessions"
+        
+        print("=== Complete Project Application Summary ===")
+        print(f"Function names: {results['functions_applied']}")
+        print(f"Variable names: {results['variables_applied']}")
+        print(f"Notes: {results['notes_applied']}")
+        print(f"Tags: {results['tags_applied']}")
+        print(f"Chat sessions: {results['chat_sessions_restored']}")
+        print(f"Pseudocode blocks updated: {results['pseudocode_updated']}")
+        print("=== End Application Summary ===")
+        
+        return functions_data, results
+    
+    @staticmethod
+    def _apply_function_names_with_pseudocode(
+        functions_data: Dict, 
+        function_names: Dict[str, str]
+    ) -> Tuple[int, int]:
+        """
+        Apply custom function names and update pseudocode content.
+        
+        Returns:
+            Tuple of (functions_applied, pseudocode_blocks_updated)
+        """
+        if not functions_data or 'functions' not in functions_data:
+            return 0, 0
+        
+        functions_applied = 0
+        pseudocode_updated = 0
+        
+        for func in functions_data['functions']:
+            # Check if there's a custom name for this function's current name (original name)
+            if function_names.get(func.get('name')):
+                custom_name = function_names[func['name']]
+                original_name = func['name']
+                
+                # Set the original name for tracking (if not already set)
+                if not func.get('originalName'):
+                    func['originalName'] = func['name']
+                
+                # Apply the custom name
+                func['name'] = custom_name
+                functions_applied += 1
+                
+                # Update pseudocode content to replace original name with custom name
+                if func.get('pseudocode'):
+                    try:
+                        # Create a regex that matches the function name as a whole word
+                        regex = re.compile(r'\b' + re.escape(original_name) + r'\b')
+                        updated_pseudocode = regex.sub(custom_name, func['pseudocode'])
+                        
+                        if updated_pseudocode != func['pseudocode']:
+                            func['pseudocode'] = updated_pseudocode
+                            pseudocode_updated += 1
+                            print(f"Updated pseudocode for function '{original_name}' -> '{custom_name}'")
+                    except Exception as e:
+                        print(f"Error updating pseudocode for function {original_name}: {e}")
+                
+                print(f"Applied function rename: '{func['originalName']}' -> '{func['name']}'")
+        
+        return functions_applied, pseudocode_updated
+    
+    @staticmethod
+    def _apply_variable_names_with_pseudocode(
+        functions_data: Dict, 
+        variable_names: Dict[str, Dict[str, str]]
+    ) -> Tuple[int, int]:
+        """
+        Apply custom variable names and update pseudocode content.
+        
+        Returns:
+            Tuple of (variables_applied, pseudocode_blocks_updated)
+        """
+        if not functions_data or 'functions' not in functions_data:
+            return 0, 0
+        
+        variables_applied = 0
+        pseudocode_updated = 0
+        
+        for func in functions_data['functions']:
+            if func['address'] in variable_names and func.get('local_variables'):
+                func_var_names = variable_names[func['address']]
+                function_pseudocode_updated = False
+                updated_pseudocode = func.get('pseudocode', '')
+                
+                for variable in func['local_variables']:
+                    # Check if there's a custom name for this variable's current name (original name)
+                    if func_var_names.get(variable.get('name')):
+                        custom_name = func_var_names[variable['name']]
+                        original_name = variable['name']
+                        
+                        # Set the original name for tracking (if not already set)
+                        if not variable.get('originalName'):
+                            variable['originalName'] = variable['name']
+                        
+                        # Apply the custom name
+                        variable['name'] = custom_name
+                        variables_applied += 1
+                        
+                        # Update pseudocode content to replace original variable name with custom name
+                        if updated_pseudocode:
+                            try:
+                                # Create a regex that matches the variable name as a whole word
+                                regex = re.compile(r'\b' + re.escape(original_name) + r'\b')
+                                new_pseudocode = regex.sub(custom_name, updated_pseudocode)
+                                
+                                if new_pseudocode != updated_pseudocode:
+                                    updated_pseudocode = new_pseudocode
+                                    function_pseudocode_updated = True
+                                    print(f"Updated pseudocode for variable '{original_name}' -> '{custom_name}' in function {func['address']}")
+                            except Exception as e:
+                                print(f"Error updating pseudocode for variable {original_name}: {e}")
+                        
+                        print(f"Applied variable rename: '{variable['originalName']}' -> '{variable['name']}'")
+                
+                # If pseudocode was updated, apply it to the function
+                if function_pseudocode_updated and updated_pseudocode != func.get('pseudocode'):
+                    func['pseudocode'] = updated_pseudocode
+                    pseudocode_updated += 1
+        
+        return variables_applied, pseudocode_updated
+    
+    @staticmethod
+    async def _apply_notes(notes: Dict[str, str], binary_name: str) -> int:
+        """Apply notes to functions via backend API."""
+        clean_binary_name = ProjectService.clean_binary_name(
+            ProjectService.get_binary_name_without_extension(binary_name)
+        )
+        
+        applied_count = 0
+        
+        async with aiohttp.ClientSession() as session:
+            for function_address, note_content in notes.items():
+                try:
+                    url = f"http://localhost:8000/api/notes/{clean_binary_name}/{function_address}"
+                    async with session.post(
+                        url,
+                        json={"content": note_content},
+                        headers={"Content-Type": "application/json"}
+                    ) as response:
+                        if response.status == 200:
+                            applied_count += 1
+                            print(f"Successfully applied note for function {function_address}")
+                        else:
+                            print(f"Failed to apply note for function {function_address}: {response.status}")
+                except Exception as e:
+                    print(f"Error applying note for function {function_address}: {e}")
+        
+        return applied_count
+    
+    @staticmethod
+    async def _apply_tags(tags: Dict[str, List], binary_name: str) -> int:
+        """Apply tags to functions via backend API."""
+        clean_binary_name = ProjectService.clean_binary_name(
+            ProjectService.get_binary_name_without_extension(binary_name)
+        )
+        
+        applied_count = 0
+        
+        async with aiohttp.ClientSession() as session:
+            for function_address, function_tags in tags.items():
+                try:
+                    url = f"http://localhost:8000/api/tags/{clean_binary_name}/{function_address}"
+                    async with session.post(
+                        url,
+                        json={"tags": function_tags},
+                        headers={"Content-Type": "application/json"}
+                    ) as response:
+                        if response.status == 200:
+                            applied_count += 1
+                            print(f"Successfully applied tags for function {function_address}")
+                        else:
+                            print(f"Failed to apply tags for function {function_address}: {response.status}")
+                except Exception as e:
+                    print(f"Error applying tags for function {function_address}: {e}")
+        
+        return applied_count
+    
+    @staticmethod
+    async def _restore_chat_sessions(sessions: List[Dict]) -> int:
+        """Restore chat sessions via backend API."""
+        if not sessions:
+            return 0
+        
+        restored_count = 0
+        
+        async with aiohttp.ClientSession() as session_client:
+            for session_data in sessions:
+                try:
+                    url = "http://localhost:8000/api/chat/restore"
+                    async with session_client.post(
+                        url,
+                        json={
+                            "session_id": session_data.get("session_id"),
+                            "name": session_data.get("name"),
+                            "created_at": session_data.get("created_at"),
+                            "last_activity": session_data.get("last_activity"),
+                            "messages": session_data.get("messages", [])
+                        },
+                        headers={"Content-Type": "application/json"}
+                    ) as response:
+                        if response.status == 200:
+                            restored_count += 1
+                            print(f"✓ Restored session: {session_data.get('session_id')}")
+                        else:
+                            print(f"✗ Failed to restore session {session_data.get('session_id')}: {response.status}")
+                except Exception as e:
+                    print(f"✗ Error restoring session {session_data.get('session_id')}: {e}")
+        
+        return restored_count 

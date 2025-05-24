@@ -49,6 +49,17 @@ class BatchApplyResponse(BaseModel):
     success: bool
     details: Dict[str, Any]
 
+class CompleteProjectApplicationRequest(BaseModel):
+    functions_data: Dict[str, Any]
+    project_data: Dict[str, Any]
+    binary_path: str
+    binary_name: str
+
+class CompleteProjectApplicationResponse(BaseModel):
+    functions_data: Dict[str, Any]
+    results: Dict[str, Any]
+    success: bool
+
 class HashResponse(BaseModel):
     hash: str
 
@@ -306,6 +317,27 @@ async def validate_project_state(request: ProjectStateRequest):
             "validation_results": validation_results,
             "is_valid": validation_results['overall_valid']
         }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/complete-project-application", response_model=CompleteProjectApplicationResponse)
+async def complete_project_application(request: CompleteProjectApplicationRequest):
+    """Apply complete project data including all customizations."""
+    try:
+        # Apply complete project data using the new backend service method
+        updated_functions_data, results = await ProjectService.apply_complete_project(
+            request.functions_data,
+            request.project_data,
+            request.binary_path,
+            request.binary_name
+        )
+        
+        return CompleteProjectApplicationResponse(
+            functions_data=updated_functions_data,
+            results=results,
+            success=True
+        )
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) 

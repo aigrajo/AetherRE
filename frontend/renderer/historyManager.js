@@ -176,64 +176,24 @@ async function applyRestoredState(operation, restoredState) {
   
   switch (operationType) {
     case 'rename_function':
+      // Use the specialized function renamer restore logic
+      try {
+        debugLog("Using functionRenamer's applyRestoredState for function rename");
+        const { applyRestoredState: applyFunctionRestoredState } = await import('./functionRenamer.js');
+        await applyFunctionRestoredState(restoredState);
+      } catch (error) {
+        console.error('Error calling functionRenamer.applyRestoredState:', error);
+        // Fallback to basic restoration
+        await applyBasicFunctionRestore(restoredState);
+      }
+      break;
+      
     case 'rename_variable':
-      // Update current function if present
-      if (restoredState.currentFunction) {
-        debugLog("Updating current function");
-        state.currentFunction = restoredState.currentFunction;
-      }
-      
-      // Update functions data if present
-      if (restoredState.functionsData) {
-        debugLog("Updating functions data");
-        state.functionsData = restoredState.functionsData;
-      }
-      
-      // Update Monaco editor with pseudocode - check multiple possible locations
-      let pseudocodeToRestore = null;
-      
-      // First try the direct pseudocode field
-      if (restoredState.pseudocode) {
-        pseudocodeToRestore = restoredState.pseudocode;
-        debugLog("Found pseudocode in restoredState.pseudocode");
-      }
-      // Then try the current function's pseudocode
-      else if (state.currentFunction && state.currentFunction.pseudocode) {
-        pseudocodeToRestore = state.currentFunction.pseudocode;
-        debugLog("Found pseudocode in state.currentFunction.pseudocode");
-      }
-      // Finally try the restored current function's pseudocode
-      else if (restoredState.currentFunction && restoredState.currentFunction.pseudocode) {
-        pseudocodeToRestore = restoredState.currentFunction.pseudocode;
-        debugLog("Found pseudocode in restoredState.currentFunction.pseudocode");
-      }
-      
-      if (pseudocodeToRestore) {
-        debugLog("Updating Monaco editor with restored pseudocode:", pseudocodeToRestore.substring(0, 100) + "...");
-        updateMonacoEditorContent(pseudocodeToRestore);
-      } else {
-        debugLog("No pseudocode found to restore");
-      }
-      
-      // Update function name display
-      if (state.currentFunction && state.currentFunction.name) {
-        debugLog("Updating function name display");
-        const functionNameEl = document.getElementById('function-name');
-        if (functionNameEl) {
-          functionNameEl.textContent = state.currentFunction.name;
-          functionNameEl.setAttribute('data-function-name', state.currentFunction.name);
-          debugLog(`Updated function name display to: ${state.currentFunction.name}`);
-        }
-      }
-      
-      // Trigger UI updates if available
-      if (window.updateFunctionsList) {
-        debugLog("Triggering updateFunctionsList");
-        window.updateFunctionsList();
-      }
+      // Keep the existing variable rename logic
+      await applyBasicFunctionRestore(restoredState);
       
       // Update variables table if it's a variable operation
-      if (operationType === 'rename_variable' && window.updateVariablesTable) {
+      if (window.updateVariablesTable) {
         debugLog("Triggering updateVariablesTable");
         window.updateVariablesTable();
       }
@@ -265,6 +225,68 @@ async function applyRestoredState(operation, restoredState) {
       state.assemblyEditor.layout();
     }
   }, 10);
+}
+
+/**
+ * Basic function restore for fallback scenarios
+ */
+async function applyBasicFunctionRestore(restoredState) {
+  debugLog("Applying basic function restore");
+  
+  // Update current function if present
+  if (restoredState.currentFunction) {
+    debugLog("Updating current function");
+    state.currentFunction = restoredState.currentFunction;
+  }
+  
+  // Update functions data if present
+  if (restoredState.functionsData) {
+    debugLog("Updating functions data");
+    state.functionsData = restoredState.functionsData;
+  }
+  
+  // Update Monaco editor with pseudocode - check multiple possible locations
+  let pseudocodeToRestore = null;
+  
+  // First try the direct pseudocode field
+  if (restoredState.pseudocode) {
+    pseudocodeToRestore = restoredState.pseudocode;
+    debugLog("Found pseudocode in restoredState.pseudocode");
+  }
+  // Then try the current function's pseudocode
+  else if (state.currentFunction && state.currentFunction.pseudocode) {
+    pseudocodeToRestore = state.currentFunction.pseudocode;
+    debugLog("Found pseudocode in state.currentFunction.pseudocode");
+  }
+  // Finally try the restored current function's pseudocode
+  else if (restoredState.currentFunction && restoredState.currentFunction.pseudocode) {
+    pseudocodeToRestore = restoredState.currentFunction.pseudocode;
+    debugLog("Found pseudocode in restoredState.currentFunction.pseudocode");
+  }
+  
+  if (pseudocodeToRestore) {
+    debugLog("Updating Monaco editor with restored pseudocode:", pseudocodeToRestore.substring(0, 100) + "...");
+    updateMonacoEditorContent(pseudocodeToRestore);
+  } else {
+    debugLog("No pseudocode found to restore");
+  }
+  
+  // Update function name display
+  if (state.currentFunction && state.currentFunction.name) {
+    debugLog("Updating function name display");
+    const functionNameEl = document.getElementById('function-name');
+    if (functionNameEl) {
+      functionNameEl.textContent = state.currentFunction.name;
+      functionNameEl.setAttribute('data-function-name', state.currentFunction.name);
+      debugLog(`Updated function name display to: ${state.currentFunction.name}`);
+    }
+  }
+  
+  // Trigger UI updates if available
+  if (window.updateFunctionsList) {
+    debugLog("Triggering updateFunctionsList");
+    window.updateFunctionsList();
+  }
 }
 
 /**

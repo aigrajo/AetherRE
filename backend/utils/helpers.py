@@ -129,41 +129,14 @@ def analyze_xrefs(binary_path: Optional[str], function_data: Any) -> dict:
                     context=instr.get("disassembly", "")
                 )
                 xrefs["outgoing"][func_addr].append(xref)
-                
-            # Jumps to other functions
-            elif instr.get("type") == "jump" and "target" in instr:
-                target = instr["target"]
-                if target in function_data:
-                    xref = XRef(
-                        source_func=func_addr,
-                        target_func=target,
-                        xref_type=XRefType.JUMP,
-                        offset=instr.get("offset", 0),
-                        context=instr.get("disassembly", "")
-                    )
-                    xrefs["outgoing"][func_addr].append(xref)
-                    if target not in xrefs["incoming"]:
-                        xrefs["incoming"][target] = []
-                    xrefs["incoming"][target].append(xref)
-                    
-            # Data references
-            elif instr.get("type") == "data" and "target" in instr:
-                xref = XRef(
-                    source_func=func_addr,
-                    target_func=instr["target"],
-                    xref_type=XRefType.DATA_REFERENCE,
-                    offset=instr.get("offset", 0),
-                    context=instr.get("disassembly", "")
-                )
-                xrefs["outgoing"][func_addr].append(xref)
     
     # Convert XRef objects to dictionaries for JSON serialization
     result = {"incoming": {}, "outgoing": {}}
     for func_addr in xrefs["incoming"]:
         result["incoming"][func_addr] = [
             {
-                "source": xref.source_func,
-                "target": xref.target_func,
+                "source_func": xref.source_func,
+                "target_func": xref.target_func,
                 "type": xref.xref_type.value,
                 "offset": xref.offset,
                 "context": xref.context
@@ -174,8 +147,8 @@ def analyze_xrefs(binary_path: Optional[str], function_data: Any) -> dict:
     for func_addr in xrefs["outgoing"]:
         result["outgoing"][func_addr] = [
             {
-                "source": xref.source_func,
-                "target": xref.target_func,
+                "source_func": xref.source_func,
+                "target_func": xref.target_func,
                 "type": xref.xref_type.value,
                 "offset": xref.offset,
                 "context": xref.context

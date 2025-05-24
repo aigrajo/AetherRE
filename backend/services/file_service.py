@@ -14,13 +14,18 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Configuration
+UPLOAD_DIR = "uploads"
+NOTES_DIR = "data/notes"
+MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
+
+# Supported file extensions
+BINARY_EXTENSIONS = {'.exe', '.dll', '.so', '.dylib', '.bin'}
+ANALYSIS_EXTENSIONS = {'.json'}
+PROJECT_EXTENSIONS = {'.aere'}
+
 class FileService:
     """Service for file operations and validation."""
-    
-    # Supported file extensions
-    BINARY_EXTENSIONS = {'.exe', '.dll', '.so', '.dylib', '.bin', '.elf', '.o', '.a'}
-    JSON_EXTENSIONS = {'.json'}
-    PROJECT_EXTENSIONS = {'.aetherre'}
     
     @staticmethod
     def detect_file_type(file_path: str) -> Dict[str, Any]:
@@ -50,15 +55,15 @@ class FileService:
             file_size = path.stat().st_size
             
             # Determine file type based on extension
-            if extension in FileService.BINARY_EXTENSIONS:
+            if extension in BINARY_EXTENSIONS:
                 file_type = "binary"
                 is_valid = True
                 suggested_action = "analyze_binary"
-            elif extension in FileService.JSON_EXTENSIONS:
+            elif extension in ANALYSIS_EXTENSIONS:
                 file_type = "json_analysis"
                 is_valid = FileService._validate_json_file(file_path)
                 suggested_action = "load_analysis" if is_valid else "invalid"
-            elif extension in FileService.PROJECT_EXTENSIONS:
+            elif extension in PROJECT_EXTENSIONS:
                 file_type = "project"
                 is_valid = FileService._validate_project_file(file_path)
                 suggested_action = "load_project" if is_valid else "invalid"
@@ -201,10 +206,10 @@ class FileService:
             binary_name: Name of the binary
             
         Returns:
-            Default project filename with .aetherre extension
+            Default project filename with .aere extension
         """
         clean_name = FileService.sanitize_binary_name(binary_name)
-        return f"{clean_name}.aetherre"
+        return f"{clean_name}.aere"
     
     @staticmethod
     def extract_binary_name_from_analysis(analysis_data: Dict[str, Any], fallback_filename: str) -> str:

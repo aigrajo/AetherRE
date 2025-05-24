@@ -164,6 +164,18 @@ export class ApiService {
         });
     }
 
+    async applyCompleteProject(functionsData, projectData, binaryPath, binaryName) {
+        return this.request('/api/projects/complete-project-application', {
+            method: 'POST',
+            body: JSON.stringify({
+                functions_data: functionsData,
+                project_data: projectData,
+                binary_path: binaryPath,
+                binary_name: binaryName
+            })
+        });
+    }
+
     async getCurrentProjectState(binaryName, functionsData) {
         return this.request('/api/projects/state/current', {
             method: 'POST',

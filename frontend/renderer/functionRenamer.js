@@ -141,6 +141,42 @@ function updateStateFromBackendResult(result) {
   if (state.currentFunction && state.currentFunction.pseudocode) {
     updateMonacoEditorContent(state.currentFunction.pseudocode);
   }
+  
+  // Update function list to reflect the rename
+  if (state.functionsData && state.functionsData.functions) {
+    console.log('Refreshing function list after rename');
+    
+    // Use dynamic import to avoid circular dependency
+    import('./functionManager.js').then(({ renderFunctionList, filterFunctions }) => {
+      // Check if there's an active filter and preserve it
+      const functionFilter = document.getElementById('function-filter');
+      const filterValue = functionFilter ? functionFilter.value.trim() : '';
+      
+      if (filterValue) {
+        console.log(`Applying existing filter "${filterValue}" after rename`);
+        filterFunctions(filterValue);
+      } else {
+        renderFunctionList(state.functionsData.functions);
+      }
+      
+      // Re-select the current function in the list
+      if (state.currentFunction && state.currentFunction.address) {
+        setTimeout(() => {
+          const functionListItems = document.querySelectorAll('.function-item');
+          functionListItems.forEach(item => {
+            if (item.dataset.address === state.currentFunction.address) {
+              item.classList.add('selected');
+              console.log(`Re-selected function in list: ${state.currentFunction.name}`);
+            } else {
+              item.classList.remove('selected');
+            }
+          });
+        }, 10); // Small delay to ensure list is rendered
+      }
+    }).catch(error => {
+      console.error('Error refreshing function list:', error);
+    });
+  }
 }
 
 // Record function rename operation in unified history
@@ -182,15 +218,21 @@ async function recordFunctionRename(oldName, newName, oldState, newState) {
 }
 
 // Apply restored state from backend undo/redo operations
-function applyRestoredState(restoredState) {
+export function applyRestoredState(restoredState) {
   console.log('Applying restored state from backend');
   
-  if (restoredState.current_function) {
-    state.currentFunction = restoredState.current_function;
+  // Handle both snake_case (from backend) and camelCase (from frontend) formats
+  const currentFunction = restoredState.current_function || restoredState.currentFunction;
+  const functionsData = restoredState.functions_data || restoredState.functionsData;
+  
+  if (currentFunction) {
+    state.currentFunction = currentFunction;
+    console.log('Updated current function from restored state:', currentFunction.name);
   }
   
-  if (restoredState.functions_data) {
-    state.functionsData = restoredState.functions_data;
+  if (functionsData) {
+    state.functionsData = functionsData;
+    console.log('Updated functions data from restored state');
   }
   
   // Update Monaco editor
@@ -203,6 +245,42 @@ function applyRestoredState(restoredState) {
   if (functionNameEl && state.currentFunction && state.currentFunction.name) {
     functionNameEl.textContent = state.currentFunction.name;
     functionNameEl.setAttribute('data-function-name', state.currentFunction.name);
+  }
+  
+  // Update function list to reflect the restored state
+  if (state.functionsData && state.functionsData.functions) {
+    console.log('Refreshing function list after state restore');
+    
+    // Use dynamic import to avoid circular dependency
+    import('./functionManager.js').then(({ renderFunctionList, filterFunctions }) => {
+      // Check if there's an active filter and preserve it
+      const functionFilter = document.getElementById('function-filter');
+      const filterValue = functionFilter ? functionFilter.value.trim() : '';
+      
+      if (filterValue) {
+        console.log(`Applying existing filter "${filterValue}" after restore`);
+        filterFunctions(filterValue);
+      } else {
+        renderFunctionList(state.functionsData.functions);
+      }
+      
+      // Re-select the current function in the list
+      if (state.currentFunction && state.currentFunction.address) {
+        setTimeout(() => {
+          const functionListItems = document.querySelectorAll('.function-item');
+          functionListItems.forEach(item => {
+            if (item.dataset.address === state.currentFunction.address) {
+              item.classList.add('selected');
+              console.log(`Re-selected function in list after restore: ${state.currentFunction.name}`);
+            } else {
+              item.classList.remove('selected');
+            }
+          });
+        }, 10); // Small delay to ensure list is rendered
+      }
+    }).catch(error => {
+      console.error('Error refreshing function list after restore:', error);
+    });
   }
 }
 

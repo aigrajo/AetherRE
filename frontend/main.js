@@ -441,7 +441,7 @@ ipcMain.handle('save-project', async (event, projectData, filename) => {
     const result = await dialog.showSaveDialog(mainWindow, {
       defaultPath: filename,
       filters: [
-        { name: 'AetherRE Project Files', extensions: ['aetherre'] },
+        { name: 'AetherRE Project Files', extensions: ['aere'] },
         { name: 'All Files', extensions: ['*'] }
       ]
     });
@@ -478,7 +478,7 @@ ipcMain.handle('load-project', async (event, defaultPath) => {
       defaultPath: defaultPath,
       properties: ['openFile'],
       filters: [
-        { name: 'AetherRE Project Files', extensions: ['aetherre'] },
+        { name: 'AetherRE Project Files', extensions: ['aere'] },
         { name: 'All Files', extensions: ['*'] }
       ]
     });
@@ -533,7 +533,7 @@ ipcMain.handle('show-project-load-dialog', async (event) => {
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openFile'],
       filters: [
-        { name: 'AetherRE Project Files', extensions: ['aetherre'] },
+        { name: 'AetherRE Project Files', extensions: ['aere'] },
         { name: 'All Files', extensions: ['*'] }
       ]
     });
@@ -568,7 +568,7 @@ ipcMain.handle('show-project-save-dialog', async (event, projectData, defaultFil
     const result = await dialog.showSaveDialog(mainWindow, {
       defaultPath: defaultFilename,
       filters: [
-        { name: 'AetherRE Project Files', extensions: ['aetherre'] },
+        { name: 'AetherRE Project Files', extensions: ['aere'] },
         { name: 'All Files', extensions: ['*'] }
       ]
     });
