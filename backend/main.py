@@ -21,6 +21,7 @@ from backend.api.routes.tags import router as tags_router
 from backend.api.routes.files import router as files_router
 from backend.api.routes.functions import router as functions_router
 from backend.api.routes.history import router as history_router
+from backend.api.routes.xrefs import router as xrefs_router
 
 # Import utilities
 from backend.utils.helpers import analyze_xrefs, process_function_data_with_enhancements
@@ -44,6 +45,7 @@ app.include_router(tags_router)
 app.include_router(files_router)
 app.include_router(functions_router)
 app.include_router(history_router, prefix="/api/history")
+app.include_router(xrefs_router)
 
 # Command-line mode functions
 def analyze_binary(binary_path: str):
