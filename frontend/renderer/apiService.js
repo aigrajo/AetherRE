@@ -388,6 +388,57 @@ export class ApiService {
             })
         });
     }
+
+    // Unified History API calls
+    async recordOperation(sessionId, operationType, operationData, oldState, newState, metadata = null) {
+        return this.request('/api/history/record', {
+            method: 'POST',
+            body: JSON.stringify({
+                session_id: sessionId,
+                operation_type: operationType,
+                operation_data: operationData,
+                old_state: oldState,
+                new_state: newState,
+                metadata: metadata
+            })
+        });
+    }
+
+    async undoLastOperation(sessionId) {
+        return this.request('/api/history/undo', {
+            method: 'POST',
+            body: JSON.stringify({
+                session_id: sessionId
+            })
+        });
+    }
+
+    async redoLastOperation(sessionId) {
+        return this.request('/api/history/redo', {
+            method: 'POST',
+            body: JSON.stringify({
+                session_id: sessionId
+            })
+        });
+    }
+
+    async getHistoryState(sessionId) {
+        return this.request('/api/history/state', {
+            method: 'POST',
+            body: JSON.stringify({
+                session_id: sessionId
+            })
+        });
+    }
+
+    async clearHistory(sessionId) {
+        return this.request('/api/history/clear', {
+            method: 'POST',
+            body: JSON.stringify({
+                session_id: sessionId
+            })
+        });
+    }
 }
 
 // Create and export singleton instance

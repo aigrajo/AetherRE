@@ -1,5 +1,4 @@
 import { state } from './core.js';
-import { recordAction } from './historyManager.js';
 import { apiService } from './apiService.js';
 
 // Global flag to track focus issues
@@ -69,6 +68,13 @@ export async function renameFunction(oldName, newName) {
   
   console.log(`Attempting to rename function from "${oldName}" to "${newName}"`);
   
+  // Capture old state before making changes
+  const oldState = {
+    pseudocode: state.currentFunction.pseudocode,
+    currentFunction: JSON.parse(JSON.stringify(state.currentFunction)),
+    functionsData: JSON.parse(JSON.stringify(state.functionsData || {}))
+  };
+  
   try {
     // Call comprehensive backend service
     const result = await apiService.renameFunction(
@@ -90,8 +96,15 @@ export async function renameFunction(oldName, newName) {
     // Apply the updates returned from backend
     updateStateFromBackendResult(result);
     
-    // Record action for local history (simplified)
-    recordSimpleAction(oldName, newName, result.operation_id);
+    // Capture new state after making changes
+    const newState = {
+      pseudocode: state.currentFunction.pseudocode,
+      currentFunction: JSON.parse(JSON.stringify(state.currentFunction)),
+      functionsData: JSON.parse(JSON.stringify(state.functionsData || {}))
+    };
+    
+    // Record in unified history
+    await recordFunctionRename(oldName, newName, oldState, newState);
     
     return true;
     
@@ -104,71 +117,66 @@ export async function renameFunction(oldName, newName) {
 
 // Apply backend updates to frontend state
 function updateStateFromBackendResult(result) {
-  console.log('Applying backend updates to frontend state');
-  
-  // Update current function with backend result
   if (result.updated_current_function) {
     state.currentFunction = result.updated_current_function;
-    console.log(`Updated current function name to: ${state.currentFunction.name}`);
+    console.log('Updated current function state:', state.currentFunction);
   }
   
-  // Update functions data with backend result
   if (result.updated_functions_data) {
     state.functionsData = result.updated_functions_data;
-    console.log('Updated functions data from backend');
-  }
-  
-  // Update Monaco editor with new pseudocode
-  if (state.currentFunction.pseudocode) {
-    updateMonacoEditorContent(state.currentFunction.pseudocode);
+    console.log('Updated functions data');
   }
   
   // Update function name display
-  const functionNameEl = document.getElementById('function-name');
-  if (functionNameEl && state.currentFunction.name) {
-    functionNameEl.textContent = state.currentFunction.name;
-    functionNameEl.setAttribute('data-function-name', state.currentFunction.name);
-    console.log(`Updated function name display to: ${state.currentFunction.name}`);
+  if (state.currentFunction && state.currentFunction.name) {
+    const functionNameEl = document.getElementById('function-name');
+    if (functionNameEl) {
+      functionNameEl.textContent = state.currentFunction.name;
+      functionNameEl.setAttribute('data-function-name', state.currentFunction.name);
+      console.log(`Updated function name display to: ${state.currentFunction.name}`);
+    }
+  }
+  
+  // Update Monaco editor content if available
+  if (state.currentFunction && state.currentFunction.pseudocode) {
+    updateMonacoEditorContent(state.currentFunction.pseudocode);
   }
 }
 
-// Simplified action recording for local undo/redo
-function recordSimpleAction(oldName, newName, operationId) {
-  recordAction({
-    type: 'rename_function_backend',
-    oldName,
-    newName,
-    operationId,
-    sessionId,
-    undo: async () => {
-      console.log(`Undoing backend function rename: "${newName}" -> "${oldName}"`);
-      try {
-        const result = await apiService.undoFunctionOperation(sessionId, operationId);
-        if (result.success && result.restored_state) {
-          applyRestoredState(result.restored_state);
-        } else {
-          console.error('Backend undo failed:', result.error);
-          window.showErrorModal('Undo failed: ' + (result.error || 'Unknown error'));
-        }
-      } catch (error) {
-        console.error('Error during undo:', error);
-        window.showErrorModal('Undo failed: ' + error.message);
-      }
+// Record function rename operation in unified history
+async function recordFunctionRename(oldName, newName, oldState, newState) {
+  const { recordAction } = await import('./historyManager.js');
+  
+  console.log('Recording function rename in history:');
+  console.log('  oldName:', oldName);
+  console.log('  newName:', newName);
+  console.log('  oldState.pseudocode length:', oldState.pseudocode ? oldState.pseudocode.length : 'null');
+  console.log('  newState.pseudocode length:', newState.pseudocode ? newState.pseudocode.length : 'null');
+  console.log('  oldState.currentFunction.name:', oldState.currentFunction ? oldState.currentFunction.name : 'null');
+  console.log('  newState.currentFunction.name:', newState.currentFunction ? newState.currentFunction.name : 'null');
+  
+  await recordAction({
+    type: 'rename_function',
+    operationData: {
+      old_name: oldName,
+      new_name: newName,
+      function_id: state.currentFunction?.address || state.currentFunction?.id
     },
-    redo: async () => {
-      console.log(`Redoing backend function rename: "${oldName}" -> "${newName}"`);
-      try {
-        const result = await apiService.redoFunctionOperation(sessionId, operationId);
-        if (result.success && result.restored_state) {
-          applyRestoredState(result.restored_state);
-        } else {
-          console.error('Backend redo failed:', result.error);
-          window.showErrorModal('Redo failed: ' + (result.error || 'Unknown error'));
-        }
-      } catch (error) {
-        console.error('Error during redo:', error);
-        window.showErrorModal('Redo failed: ' + error.message);
-      }
+    oldState: {
+      name: oldName,
+      pseudocode: oldState.pseudocode,
+      currentFunction: oldState.currentFunction,
+      functionsData: oldState.functionsData
+    },
+    newState: {
+      name: newName, 
+      pseudocode: newState.pseudocode,
+      currentFunction: newState.currentFunction,
+      functionsData: newState.functionsData
+    },
+    metadata: {
+      timestamp: new Date().toISOString(),
+      operation_type: 'function_rename'
     }
   });
 }

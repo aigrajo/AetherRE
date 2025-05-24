@@ -1,7 +1,6 @@
 // NoteEditor.js - CodeMirror-based note editor component
 
 import { getCurrentContext } from './TagNotePanel.js';
-import { recordAction } from './historyManager.js';
 
 // CodeMirror editor instance
 let editor = null;
@@ -102,7 +101,7 @@ async function saveNote(contentOrEvent) {
   // Don't save if nothing changed
   if (newContent === lastSavedNote) return;
   
-  // Store old content for undo/redo
+  // Store old content for reference
   const oldContent = lastSavedNote;
   const context = await getCurrentContext();
   
@@ -131,54 +130,8 @@ async function saveNote(contentOrEvent) {
     console.warn('Cannot save note: missing context', context);
   }
   
-  // Record action for undo/redo
-  recordAction({
-    type: 'edit_note',
-    oldState: {
-      content: oldContent,
-      context: JSON.parse(JSON.stringify(context))
-    },
-    newState: {
-      content: newContent,
-      context: JSON.parse(JSON.stringify(context))
-    },
-    undo: async () => {
-      // Restore the old note content if we're on the same context
-      const currentContext = await getCurrentContext();
-      if (currentContext && 
-          context && 
-          currentContext.type === context.type && 
-          currentContext.id === context.id) {
-        
-        if (editor) {
-          editor.value = oldContent;
-          lastSavedNote = oldContent;
-          currentNote = oldContent;
-          
-          // Update UI elements to show note was restored
-          updateNoteStatusMessage('Restored previous note version');
-        }
-      }
-    },
-    redo: async () => {
-      // Restore the new note content if we're on the same context
-      const currentContext = await getCurrentContext();
-      if (currentContext && 
-          context && 
-          currentContext.type === context.type && 
-          currentContext.id === context.id) {
-        
-        if (editor) {
-          editor.value = newContent;
-          lastSavedNote = newContent;
-          currentNote = newContent;
-          
-          // Update UI elements to show note was restored
-          updateNoteStatusMessage('Restored newer note version');
-        }
-      }
-    }
-  });
+  // Don't record in custom history - let browser handle undo/redo
+  // await recordNoteEdit(oldContent, newContent, context);
   
   // Update saved note state
   lastSavedNote = newContent;
@@ -224,6 +177,11 @@ export function setNoteContent(content) {
   }
   
   console.log(`NoteEditor: Content set to ${(content || '').length} characters`);
+}
+
+// Expose globally for history manager
+if (typeof window !== 'undefined') {
+  window.setNoteContent = setNoteContent;
 }
 
 /**

@@ -1,5 +1,4 @@
 import { state } from './core.js';
-import { recordAction } from './historyManager.js';
 import { apiService } from './apiService.js';
 
 // Generate a simple session ID for history tracking (shared with function renamer)
@@ -14,6 +13,12 @@ export async function renameVariable(oldName, newName) {
   if (!state.currentFunction || !oldName || !newName || oldName === newName) return false;
   
   console.log(`Attempting to rename variable from "${oldName}" to "${newName}"`);
+  
+  // Capture old state before making changes
+  const oldState = {
+    pseudocode: state.currentFunction.pseudocode,
+    currentFunction: JSON.parse(JSON.stringify(state.currentFunction))
+  };
   
   try {
     // Call comprehensive backend service
@@ -35,8 +40,14 @@ export async function renameVariable(oldName, newName) {
     // Apply the updates returned from backend
     updateStateFromBackendResult(result);
     
-    // Record action for local history (simplified)
-    recordSimpleAction(oldName, newName, result.operation_id);
+    // Capture new state after making changes
+    const newState = {
+      pseudocode: state.currentFunction.pseudocode,
+      currentFunction: JSON.parse(JSON.stringify(state.currentFunction))
+    };
+    
+    // Record in unified history
+    await recordVariableRename(oldName, newName, oldState, newState);
     
     return true;
     
@@ -66,43 +77,30 @@ function updateStateFromBackendResult(result) {
   updateVariablesTable();
 }
 
-// Simplified action recording for local undo/redo
-function recordSimpleAction(oldName, newName, operationId) {
-  recordAction({
-    type: 'rename_variable_backend',
-    oldName,
-    newName,
-    operationId,
-    sessionId,
-    undo: async () => {
-      console.log(`Undoing backend variable rename: "${newName}" -> "${oldName}"`);
-      try {
-        const result = await apiService.undoVariableOperation(sessionId, operationId);
-        if (result.success && result.restored_state) {
-          applyRestoredState(result.restored_state);
-        } else {
-          console.error('Backend undo failed:', result.error);
-          window.showErrorModal('Undo failed: ' + (result.error || 'Unknown error'));
-        }
-      } catch (error) {
-        console.error('Error during undo:', error);
-        window.showErrorModal('Undo failed: ' + error.message);
-      }
+// Record variable rename operation in unified history
+async function recordVariableRename(oldName, newName, oldState, newState) {
+  const { recordAction } = await import('./historyManager.js');
+  
+  await recordAction({
+    type: 'rename_variable',
+    operationData: {
+      old_name: oldName,
+      new_name: newName,
+      function_id: state.currentFunction?.address || state.currentFunction?.id
     },
-    redo: async () => {
-      console.log(`Redoing backend variable rename: "${oldName}" -> "${newName}"`);
-      try {
-        const result = await apiService.redoVariableOperation(sessionId, operationId);
-        if (result.success && result.restored_state) {
-          applyRestoredState(result.restored_state);
-        } else {
-          console.error('Backend redo failed:', result.error);
-          window.showErrorModal('Redo failed: ' + (result.error || 'Unknown error'));
-        }
-      } catch (error) {
-        console.error('Error during redo:', error);
-        window.showErrorModal('Redo failed: ' + error.message);
-      }
+    oldState: {
+      name: oldName,
+      pseudocode: oldState.pseudocode,
+      currentFunction: oldState.currentFunction
+    },
+    newState: {
+      name: newName, 
+      pseudocode: newState.pseudocode,
+      currentFunction: newState.currentFunction
+    },
+    metadata: {
+      timestamp: new Date().toISOString(),
+      operation_type: 'variable_rename'
     }
   });
 }
@@ -151,7 +149,7 @@ function updateMonacoEditorContent(content) {
 /**
  * Update the variables table with current function data
  */
-function updateVariablesTable() {
+export function updateVariablesTable() {
   const variablesTable = document.querySelector('#variables-table tbody');
   if (variablesTable && state.currentFunction && state.currentFunction.local_variables) {
     variablesTable.innerHTML = '';
@@ -177,6 +175,11 @@ function updateVariablesTable() {
       makeVariableEditable(nameCell, variable.name || 'unnamed');
     });
   }
+}
+
+// Expose globally for history manager
+if (typeof window !== 'undefined') {
+  window.updateVariablesTable = updateVariablesTable;
 }
 
 // Function to make a variable name editable (simplified UI logic only)
