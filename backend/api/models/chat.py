@@ -22,6 +22,7 @@ class SessionInfo(BaseModel):
     last_activity: str
     message_count: int
     messages: List[Dict[str, str]]
+    is_restored: Optional[bool] = False
 
 class SessionListResponse(BaseModel):
     sessions: List[SessionInfo]

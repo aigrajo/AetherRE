@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Any, AsyncGenerator
 import openai
 import re
 
-from backend.config.settings import OPENAI_API_KEY, DEFAULT_MODEL, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE, SESSION_TIMEOUT_HOURS
+from backend.config.settings import OPENAI_API_KEY, DEFAULT_MODEL, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE, SESSION_TIMEOUT_HOURS, MAX_CHAT_SESSIONS
 from backend.config.rate_limits import check_rate_limit
 from backend.utils.helpers import get_cache_key
 from backend.services.function_context import function_context_service
@@ -30,6 +30,7 @@ class ChatSession:
         self.created_at = datetime.now()
         self.last_activity = datetime.now()
         self.name = None  # Add name field
+        self.is_restored = False  # Flag to mark sessions restored from project files
 
     def add_message(self, role: str, content: str):
         self.messages.append({"role": role, "content": content})
@@ -44,6 +45,7 @@ class ChatSession:
         self.messages = []
         self.last_activity = datetime.now()
         self.name = None  # Reset name when clearing
+        # Keep is_restored flag when clearing - user may want to continue old session
 
     def generate_name(self, first_message: str):
         """Generate a name for the session based on the first message."""
@@ -152,16 +154,67 @@ class ChatSession:
 # Store active chat sessions
 chat_sessions: Dict[str, ChatSession] = {}
 
-# Cleanup old sessions (older than 24 hours)
+# Cleanup old sessions with special handling for restored sessions
 def cleanup_old_sessions():
     now = datetime.now()
     sessions_to_remove = []
+    restored_count = 0
+    new_count = 0
+    
+    # First pass: Remove sessions based on age
     for session_id, session in chat_sessions.items():
-        if (now - session.last_activity) > timedelta(hours=SESSION_TIMEOUT_HOURS):
-            sessions_to_remove.append(session_id)
+        # Calculate time since last activity
+        time_since_activity = now - session.last_activity
+        
+        # Different cleanup rules for restored vs new sessions
+        if session.is_restored:
+            restored_count += 1
+            # Restored sessions: much more lenient cleanup (7 days of inactivity)
+            if time_since_activity > timedelta(days=7):
+                sessions_to_remove.append(session_id)
+                print(f"[Chat] Cleaning up restored session {session_id} after 7 days of inactivity", file=sys.stderr)
+            else:
+                print(f"[Chat] Preserving restored session {session_id} (last activity: {session.last_activity})", file=sys.stderr)
+        else:
+            new_count += 1
+            # New sessions: standard cleanup (24 hours)
+            if time_since_activity > timedelta(hours=SESSION_TIMEOUT_HOURS):
+                sessions_to_remove.append(session_id)
+                print(f"[Chat] Cleaning up new session {session_id} after {SESSION_TIMEOUT_HOURS} hours", file=sys.stderr)
+    
+    # Remove age-based cleanup sessions
     for session_id in sessions_to_remove:
         del chat_sessions[session_id]
         session_manager.clear_session_associations(session_id)
+    
+    # Second pass: Enforce session limit
+    MAX_SESSIONS = MAX_CHAT_SESSIONS
+    remaining_sessions = list(chat_sessions.items())
+    
+    if len(remaining_sessions) > MAX_SESSIONS:
+        # Sort by last_activity (oldest first) but prioritize restored sessions
+        def sort_key(item):
+            session_id, session = item
+            # Restored sessions get a "bonus" of 30 days to their last_activity for sorting
+            # This makes them less likely to be removed when enforcing limits
+            bonus = timedelta(days=30) if session.is_restored else timedelta(0)
+            return session.last_activity + bonus
+        
+        remaining_sessions.sort(key=sort_key)
+        
+        # Remove oldest sessions beyond the limit
+        sessions_to_remove_for_limit = remaining_sessions[:-MAX_SESSIONS]
+        
+        print(f"[Chat] Session limit exceeded ({len(remaining_sessions)} > {MAX_SESSIONS}), removing {len(sessions_to_remove_for_limit)} oldest sessions", file=sys.stderr)
+        
+        for session_id, session in sessions_to_remove_for_limit:
+            session_type = "restored" if session.is_restored else "new"
+            print(f"[Chat] Removing {session_type} session {session_id} due to session limit (last activity: {session.last_activity})", file=sys.stderr)
+            del chat_sessions[session_id]
+            session_manager.clear_session_associations(session_id)
+    
+    final_count = len(chat_sessions)
+    print(f"[Chat] Session summary: {restored_count} restored, {new_count} new, final count: {final_count}", file=sys.stderr)
 
 async def stream_chat_response(message: str, session_id: Optional[str] = None, 
                              toggle_states: Dict[str, bool] = None,
@@ -212,6 +265,10 @@ async def stream_chat_response(message: str, session_id: Optional[str] = None,
     
     session = chat_sessions[session_id]
     session.add_message("user", message)
+    
+    # If this is a restored session, log that it's being used
+    if session.is_restored:
+        print(f"[Chat] User interacting with restored session {session_id}", file=sys.stderr)
     
     # Build context based on mode
     context_data = ""
@@ -798,7 +855,9 @@ def delete_session(session_id: str) -> bool:
 
 def get_all_sessions() -> List[Dict[str, Any]]:
     """List all active chat sessions."""
+    print(f"[Chat] Listing sessions - current count: {len(chat_sessions)}", file=sys.stderr)
     cleanup_old_sessions()  # Clean up old sessions before listing
+    print(f"[Chat] After cleanup - remaining count: {len(chat_sessions)}", file=sys.stderr)
     return [
         {
             "session_id": session_id,
@@ -806,7 +865,8 @@ def get_all_sessions() -> List[Dict[str, Any]]:
             "created_at": session.created_at.isoformat(),
             "last_activity": session.last_activity.isoformat(),
             "message_count": len(session.messages),
-            "messages": session.messages
+            "messages": session.messages,
+            "is_restored": getattr(session, 'is_restored', False)  # Include restored flag
         }
         for session_id, session in chat_sessions.items()
         if session_id is not None and len(session.messages) > 0 and session.name is not None

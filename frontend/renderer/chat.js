@@ -110,7 +110,14 @@ export async function refreshChatSessions(selectCurrentSession = true) {
       const date = new Date(session.last_activity);
       // Use the generated name if available, otherwise use the default format
       const displayName = session.name || `Chat ${session.session_id.slice(0, 8)}`;
-      option.textContent = `${displayName} (${date.toLocaleTimeString()})`;
+      // Add indicator for restored sessions
+      if (session.is_restored) {
+        option.textContent = `● ${displayName} (${date.toLocaleTimeString()})`;
+        option.classList.add('restored-session');
+        option.setAttribute('data-restored', 'true');
+      } else {
+        option.textContent = `${displayName} (${date.toLocaleTimeString()})`;
+      }
       chatSessionsSelect.appendChild(option);
     });
 

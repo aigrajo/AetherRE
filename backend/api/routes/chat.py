@@ -233,21 +233,28 @@ async def restore_chat_session(request: dict):
         # Set the name separately since constructor doesn't accept it
         restored_session.name = name or f"Restored Chat {session_id[:8]}"
         
-        # Restore the timestamps
+        # Mark as restored session for special cleanup handling
+        restored_session.is_restored = True
+        
+        # Restore the timestamps - preserve original timestamps from project file
         if created_at:
             try:
                 restored_session.created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
             except ValueError:
+                print(f"[Chat] Warning: Could not parse created_at timestamp: {created_at}", file=sys.stderr)
                 pass  # Use default if parsing fails
                 
         if last_activity:
             try:
                 restored_session.last_activity = datetime.fromisoformat(last_activity.replace('Z', '+00:00'))
             except ValueError:
+                print(f"[Chat] Warning: Could not parse last_activity timestamp: {last_activity}", file=sys.stderr)
                 pass  # Use default if parsing fails
         
         # Restore the messages
         restored_session.messages = messages
+        
+        print(f"[Chat] Restored session {session_id} with {len(messages)} messages (created: {restored_session.created_at}, last_activity: {restored_session.last_activity})", file=sys.stderr)
         
         # Add to the global sessions dictionary
         chat_sessions[session_id] = restored_session

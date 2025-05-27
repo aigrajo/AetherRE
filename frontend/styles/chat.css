@@ -135,6 +135,13 @@
   background: #4d4d4d;
 }
 
+/* Restored session indicator */
+.chat-sessions-select option.restored-session {
+  background-color: #1a2332;
+  color: #4a9eff;
+  font-style: italic;
+}
+
 .chat-messages {
   flex: 1;
   overflow-y: auto;

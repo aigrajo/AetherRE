@@ -40,4 +40,5 @@ DEFAULT_MAX_TOKENS = 500
 DEFAULT_TEMPERATURE = 0.7
 
 # Session settings
-SESSION_TIMEOUT_HOURS = 24 
+SESSION_TIMEOUT_HOURS = 24
+MAX_CHAT_SESSIONS = 10  # Maximum number of chat sessions to keep 
