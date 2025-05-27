@@ -82,4 +82,12 @@
 
 .message.assistant.thinking br {
   display: none;
+}
+
+/* Tool execution styling - similar to generating but without gradient */
+.message.assistant.tool-executing {
+  color: var(--text-secondary);
+  position: relative;
+  opacity: 0.6;
+  font-weight: normal;
 } 

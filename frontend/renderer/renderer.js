@@ -8,7 +8,8 @@ import { setupXRefFilters } from './xrefs.js';
 import { 
   initializeChatSession, 
   setupChatEventListeners, 
-  setupContextToggles 
+  setupContextToggles,
+  setupContextModeToggle
 } from './chat.js';
 import { initTagNotePanel } from './TagNotePanel.js';
 import { PanelResizer } from '../resize.js';
@@ -100,6 +101,10 @@ async function initApp() {
   // Setup context toggles
   console.log('Setting up context toggles...');
   setupContextToggles();
+  
+  // Setup context mode toggle
+  console.log('Setting up context mode toggle...');
+  setupContextModeToggle();
 
   // Initialize TagNote panel
   console.log('Initializing TagNote panel...');

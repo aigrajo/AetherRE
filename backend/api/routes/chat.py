@@ -25,6 +25,7 @@ from backend.services.function_context import function_context_service
 from backend.services.session_manager import session_manager
 from backend.config.settings import DATA_DIR, GHIDRA_HEADLESS_SCRIPT
 from backend.utils.helpers import analyze_xrefs
+from backend.services.note_integration_service import note_integration_service
 
 router = APIRouter(prefix="/api/chat")
 
@@ -33,7 +34,9 @@ async def chat_endpoint(request: ChatRequest):
     """Chat endpoint for sending messages to the AI assistant."""
     try:
         print(f"[Chat API] Received request: {request.message}", file=sys.stderr)
-        print(f"[Chat API] Toggle states: {request.toggle_states}", file=sys.stderr)
+        print(f"[Chat API] Use AI tools: {request.use_ai_tools}", file=sys.stderr)
+        if not request.use_ai_tools:
+            print(f"[Chat API] Toggle states: {request.toggle_states}", file=sys.stderr)
         print(f"[Chat API] Session ID: {request.session_id}", file=sys.stderr)
         print(f"[Chat API] Function ID: {request.function_id}", file=sys.stderr)
         
@@ -44,7 +47,8 @@ async def chat_endpoint(request: ChatRequest):
                 session_id=request.session_id,
                 toggle_states=request.toggle_states,
                 dynamic_content=request.dynamic_content,
-                function_id=request.function_id
+                function_id=request.function_id,
+                use_ai_tools=request.use_ai_tools
             ):
                 yield chunk
             
@@ -397,4 +401,39 @@ async def analyze_json(json_data: str):
             
         return {"type": "analysis_complete", "data": result}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) 
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/save-analysis")
+async def save_analysis_to_notes(request: dict):
+    """Save AI analysis result to notes"""
+    try:
+        analysis_type = request.get("analysis_type")
+        content = request.get("content")
+        metadata = request.get("metadata", {})
+        custom_title = request.get("custom_title")
+        
+        if not analysis_type or not content:
+            raise HTTPException(status_code=400, detail="Missing required fields: analysis_type, content")
+        
+        result = await note_integration_service.save_analysis_result(
+            analysis_type=analysis_type,
+            content=content,
+            metadata=metadata,
+            custom_title=custom_title
+        )
+        
+        return result
+        
+    except Exception as e:
+        print(f"[Chat API] Error saving analysis to notes: {str(e)}", file=sys.stderr)
+        raise HTTPException(status_code=500, detail=f"Failed to save analysis: {str(e)}")
+
+@router.get("/saved-notes")
+async def get_saved_notes():
+    """Get all saved analysis notes"""
+    try:
+        notes = note_integration_service.get_saved_notes()
+        return {"success": True, "notes": notes}
+    except Exception as e:
+        print(f"[Chat API] Error getting saved notes: {str(e)}", file=sys.stderr)
+        raise HTTPException(status_code=500, detail=f"Failed to get saved notes: {str(e)}") 

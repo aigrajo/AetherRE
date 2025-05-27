@@ -158,14 +158,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
               
               try {
                 const parsed = JSON.parse(data);
+                // Always dispatch the event so the renderer can react to control
+                // packets like "thinking" and "remove_thinking" that do not
+                // include a reply field.
+                window.dispatchEvent(new CustomEvent('chat-chunk', {
+                  detail: {
+                    reply: parsed.reply,          // may be undefined
+                    session_id: parsed.session_id,
+                    save_offer: parsed.save_offer,
+                    type: parsed.type
+                  }
+                }));
+
+                // Only build up the full assistant reply text when actual
+                // content is present.
                 if (parsed.reply) {
                   fullReply += parsed.reply;
-                  
-                  // Dispatch chunk event for streaming updates
-                  window.dispatchEvent(new CustomEvent('chat-chunk', {
-                    detail: { content: parsed.reply, fullReply }
-                  }));
                 }
+
                 if (parsed.session_id) {
                   sessionId = parsed.session_id;
                 }

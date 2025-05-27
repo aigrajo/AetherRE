@@ -126,9 +126,87 @@ class FunctionContextService:
         
         return context
     
+    def get_function_context(self, function_id: str) -> Optional[Dict[str, Any]]:
+        """Get cached function context data by function ID.
+        
+        Args:
+            function_id: Function identifier
+            
+        Returns:
+            Function context data or None if not found
+        """
+        return self.current_function_data.get(function_id)
+    
+    def build_context(self, function_id: Optional[str] = None, 
+                     toggle_states: Optional[Dict[str, bool]] = None,
+                     dynamic_content: Optional[Dict[str, Any]] = None) -> str:
+        """Build context string for AI interaction.
+        
+        Args:
+            function_id: Function to build context for
+            toggle_states: What context to include
+            dynamic_content: Dynamic content like current pseudocode
+            
+        Returns:
+            Formatted context string for AI
+        """
+        if not function_id or function_id not in self.current_function_data:
+            return ""
+        
+        toggle_states = toggle_states or {}
+        data = self.current_function_data[function_id]
+        
+        context_parts = []
+        context_parts.append(f"Function: {data['function_name']}")
+        context_parts.append(f"Address: {data['address']}")
+        
+        if toggle_states.get('pseudocode', False):
+            if dynamic_content and 'pseudocode' in dynamic_content:
+                pseudocode = dynamic_content['pseudocode']
+            else:
+                pseudocode = data['pseudocode']
+            
+            if pseudocode:
+                context_parts.append(f"\nPseudocode:\n{pseudocode}")
+        
+        if toggle_states.get('assembly', False) and data['assembly']:
+            context_parts.append(f"\nAssembly ({len(data['assembly'])} instructions):")
+            for instr in data['assembly'][:10]:  # Limit to first 10 for context
+                context_parts.append(f"  {instr.get('address', '')}: {instr.get('mnemonic', '')} {instr.get('operands', '')}")
+            if len(data['assembly']) > 10:
+                context_parts.append(f"  ... and {len(data['assembly']) - 10} more instructions")
+        
+        if toggle_states.get('variables', False) and data['variables']:
+            context_parts.append(f"\nVariables ({len(data['variables'])}):")
+            for var in data['variables'][:5]:  # Limit to first 5
+                context_parts.append(f"  {var.get('name', '')} ({var.get('type', '')})")
+            if len(data['variables']) > 5:
+                context_parts.append(f"  ... and {len(data['variables']) - 5} more variables")
+        
+        if toggle_states.get('strings', False) and data['strings']:
+            context_parts.append(f"\nStrings ({len(data['strings'])}):")
+            for string in data['strings'][:5]:  # Limit to first 5
+                context_parts.append(f"  \"{string.get('value', '')}\"")
+            if len(data['strings']) > 5:
+                context_parts.append(f"  ... and {len(data['strings']) - 5} more strings")
+        
+        if toggle_states.get('xrefs', False) and data['xrefs']:
+            incoming = data['xrefs'].get('incoming', [])
+            outgoing = data['xrefs'].get('outgoing', [])
+            if incoming or outgoing:
+                context_parts.append(f"\nCross-references:")
+                context_parts.append(f"  Incoming: {len(incoming)} references")
+                context_parts.append(f"  Outgoing: {len(outgoing)} references")
+        
+        return "\n".join(context_parts)
+    
     def get_available_functions(self) -> List[str]:
         """Get list of available function IDs."""
         return list(self.current_function_data.keys())
+    
+    def get_all_functions(self) -> Dict[str, Dict[str, Any]]:
+        """Get all cached function data."""
+        return self.current_function_data.copy()
     
     def clear_function_data(self, function_id: str):
         """Clear cached data for a specific function."""

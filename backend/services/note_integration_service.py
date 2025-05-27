@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+"""
+Note Integration Service for AetherRE AI Interaction Engine
+Handles saving of AI analysis results to user notes
+"""
+
+import sys
+import json
+from typing import Dict, List, Optional, Any
+from datetime import datetime
+
+class NoteIntegrationService:
+    """Service for integrating AI analysis results with the notes system"""
+    
+    def __init__(self):
+        self.saved_notes = []  # Simple in-memory storage for now
+    
+    async def offer_save_to_notes(self, analysis_type: str, content: str, 
+                                metadata: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Offer to save analysis result to notes"""
+        try:
+            # Generate a suggested title
+            title = self._generate_note_title(analysis_type, metadata or {})
+            
+            # Format the content for notes
+            formatted_content = self._format_note_content(analysis_type, content, metadata or {})
+            
+            return {
+                "success": True,
+                "offer_save": True,
+                "suggested_title": title,
+                "formatted_content": formatted_content,
+                "analysis_type": analysis_type,
+                "metadata": metadata or {}
+            }
+        except Exception as e:
+            print(f"[NoteIntegration] Error offering save to notes: {str(e)}", file=sys.stderr)
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    async def save_analysis_result(self, analysis_type: str, content: str,
+                                 metadata: Dict[str, Any] = None, 
+                                 custom_title: Optional[str] = None) -> Dict[str, Any]:
+        """Save analysis result to notes"""
+        try:
+            # Format the note content
+            formatted_content = self._format_note_content(analysis_type, content, metadata or {})
+            
+            # Use custom title or generate one
+            title = custom_title or self._generate_note_title(analysis_type, metadata or {})
+            
+            # Create note entry
+            note_entry = {
+                "id": f"note_{datetime.now().timestamp()}",
+                "title": title,
+                "content": formatted_content,
+                "analysis_type": analysis_type,
+                "timestamp": datetime.now().isoformat(),
+                "metadata": metadata or {}
+            }
+            
+            # Save to in-memory storage (in a real implementation, this would save to a database)
+            self.saved_notes.append(note_entry)
+            
+            print(f"[NoteIntegration] Saved note: {title}", file=sys.stderr)
+            
+            return {
+                "success": True,
+                "note_id": note_entry["id"],
+                "title": title,
+                "message": "Analysis result saved to notes successfully"
+            }
+            
+        except Exception as e:
+            print(f"[NoteIntegration] Error saving to notes: {str(e)}", file=sys.stderr)
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    def get_saved_notes(self) -> List[Dict[str, Any]]:
+        """Get all saved notes"""
+        return self.saved_notes
+    
+    def _generate_note_title(self, analysis_type: str, metadata: Dict[str, Any]) -> str:
+        """Generate a descriptive title for the note"""
+        function_name = metadata.get('function_name', 'Unknown Function')
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        
+        title_templates = {
+            "function_analysis": f"AI Analysis: {function_name} ({timestamp})",
+            "function_search": f"Function Search: {metadata.get('criteria', 'Unknown')} ({timestamp})",
+            "name_suggestion": f"Name Suggestion: {function_name} ({timestamp})",
+            "documentation": f"AI Documentation: {function_name} ({timestamp})",
+            "similarity_analysis": f"Similarity Analysis: {function_name} ({timestamp})",
+            "general": f"AI Analysis: {analysis_type} ({timestamp})"
+        }
+        
+        return title_templates.get(analysis_type, title_templates["general"])
+    
+    def _format_note_content(self, analysis_type: str, content: str, metadata: Dict[str, Any]) -> str:
+        """Format analysis content for notes"""
+        formatted = f"## AI {analysis_type.replace('_', ' ').title()}\n"
+        formatted += f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        
+        # Add metadata if available
+        if metadata.get('function_name'):
+            formatted += f"**Function:** {metadata['function_name']}\n"
+        if metadata.get('function_id'):
+            formatted += f"**Function ID:** {metadata['function_id']}\n"
+        
+        formatted += "\n### Analysis Results\n"
+        formatted += content
+        
+        formatted += "\n\n---\n*Generated by AetherRE AI Interaction Engine*"
+        
+        return formatted
+
+# Global instance
+note_integration_service = NoteIntegrationService() 

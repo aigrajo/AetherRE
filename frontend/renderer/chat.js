@@ -1,5 +1,8 @@
 import { state } from './core.js';
 
+// Global state for context mode
+let contextMode = 'manual'; // 'manual' or 'ai'
+
 // Add message to chat
 export function addMessage(content, isUser = false) {
   const chatMessages = document.getElementById('chat-messages');
@@ -208,79 +211,188 @@ export async function sendMessage() {
   chatInput.value = '';
 
   try {
-    // Get toggle states and dynamic content
-    const toggleStates = getToggleStates();
-    const dynamicContent = getDynamicContent(toggleStates);
-    const functionId = getCurrentFunctionId();
+    let requestData;
     
-    console.log('[Chat] Function ID:', functionId);
-    console.log('[Chat] Toggle states:', toggleStates);
-    console.log('[Chat] Dynamic content keys:', Object.keys(dynamicContent));
+    if (contextMode === 'manual') {
+      // Manual context mode - use toggle states and function context
+      const toggleStates = getToggleStates();
+      const dynamicContent = getDynamicContent(toggleStates);
+      const functionId = getCurrentFunctionId();
+      
+      console.log('[Chat] Manual mode - Function ID:', functionId);
+      console.log('[Chat] Manual mode - Toggle states:', toggleStates);
+      console.log('[Chat] Manual mode - Dynamic content keys:', Object.keys(dynamicContent));
+
+      requestData = {
+        message: message,
+        session_id: state.currentSessionId,
+        toggle_states: toggleStates,
+        dynamic_content: dynamicContent,
+        function_id: functionId
+      };
+    } else {
+      // AI interaction mode - let AI determine what tools to use
+      console.log('[Chat] AI mode - Using AI interaction engine');
+      
+      requestData = {
+        message: message,
+        session_id: state.currentSessionId,
+        use_ai_tools: true,
+        function_id: getCurrentFunctionId() // Still provide function ID for AI tools
+      };
+    }
 
     // Create a temporary message div for the generating state
     const chatMessages = document.getElementById('chat-messages');
     const tempMessageDiv = document.createElement('div');
     tempMessageDiv.className = 'message assistant generating';
-    tempMessageDiv.textContent = 'Generating...';
+    
+    // Set appropriate progress message based on context mode
+    if (contextMode === 'manual') {
+      tempMessageDiv.textContent = 'Generating...';
+    } else {
+      tempMessageDiv.textContent = 'Thinking...';
+    }
+    
     chatMessages.appendChild(tempMessageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 
-    let assistantReply = '';
+    let initialReply = '';
+    let summaryReply = '';
+    let saveOffer = null;
+    let currentThinkingDiv = null; // The current thinking div for the last tool call
+    let lastToolCallDiv = null;    // The last tool call div
+    let thinkingContent = '';
+    let initialResponseDiv = tempMessageDiv; // This div will hold the AI's brief plan
+    let summaryDiv = null;          // Final summary div at the very bottom
+    let toolCallsStarted = false;   // Becomes true after first tool_call event
+    
     // Listen for chat chunks
     const chunkHandler = (event) => {
-      if (!assistantReply) {
-        // Clear the "Generating..." message on first chunk
-        tempMessageDiv.className = 'message assistant';
-        tempMessageDiv.textContent = '';
+      const data = event.detail;
+      
+      if (!toolCallsStarted && !initialReply && !data.type) {
+        // First assistant content: convert temp div into normal assistant message
+        initialResponseDiv.className = 'message assistant';
+        initialResponseDiv.textContent = '';
       }
-      assistantReply += event.detail.content || event.detail; // Handle both object and string formats
-      if (window.marked && window.DOMPurify) {
-        const rawHtml = window.marked.parse(assistantReply);
-        const cleanHtml = window.DOMPurify.sanitize(rawHtml);
-        tempMessageDiv.innerHTML = cleanHtml;
-        if (window.hljs) {
-          tempMessageDiv.querySelectorAll('pre code').forEach((block) => {
-            window.hljs.highlightElement(block);
-          });
+      
+      // Handle thinking events (with or without content)
+      if (data.type === 'thinking') {
+        if (data.reply) {
+          // This is thinking content with actual text
+          thinkingContent += data.reply;
+          
+          // If no thinking div exists, create one
+          if (!currentThinkingDiv) {
+            currentThinkingDiv = document.createElement('div');
+            currentThinkingDiv.className = 'message assistant thinking';
+            chatMessages.appendChild(currentThinkingDiv);
+          }
+          
+          // Update the thinking div with accumulated content
+          if (window.marked && window.DOMPurify) {
+            const rawHtml = window.marked.parse(thinkingContent);
+            const cleanHtml = window.DOMPurify.sanitize(rawHtml);
+            currentThinkingDiv.innerHTML = cleanHtml;
+          } else {
+            currentThinkingDiv.textContent = thinkingContent;
+          }
+        } else {
+          // This is just a thinking placeholder (no content)
+          if (!currentThinkingDiv) {
+            currentThinkingDiv = document.createElement('div');
+            currentThinkingDiv.className = 'message assistant thinking';
+            currentThinkingDiv.textContent = 'Thinking...';
+            chatMessages.appendChild(currentThinkingDiv);
+          }
         }
-      } else {
-        tempMessageDiv.textContent = assistantReply;
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        return; // Don't process further for thinking events
       }
-      chatMessages.scrollTop = chatMessages.scrollHeight;
+      
+      // Handle remove_thinking event
+      if (data.type === 'remove_thinking') {
+        if (currentThinkingDiv) {
+          currentThinkingDiv.remove();
+          currentThinkingDiv = null;
+          thinkingContent = '';
+        }
+        return; // Don't process further for remove_thinking events
+      }
+      
+      if (data.reply) {
+        if (data.type === 'tool_call') {
+          toolCallsStarted = true;
+          // On new tool call, remove any previous thinking div
+          if (currentThinkingDiv) {
+            currentThinkingDiv.remove();
+            currentThinkingDiv = null;
+            thinkingContent = '';
+          }
+          // Create a new tool call div
+          lastToolCallDiv = document.createElement('div');
+          lastToolCallDiv.className = 'message assistant tool-call';
+          lastToolCallDiv.textContent = data.reply;
+          chatMessages.appendChild(lastToolCallDiv);
+        } else {
+          // Decide where to place this content
+          let targetDiv;
+          if (!toolCallsStarted) {
+            // Still in initial brief response phase
+            targetDiv = initialResponseDiv;
+          } else {
+            // We are in summary phase
+            if (!summaryDiv) {
+              summaryDiv = document.createElement('div');
+              summaryDiv.className = 'message assistant';
+              chatMessages.appendChild(summaryDiv);
+            }
+            targetDiv = summaryDiv;
+          }
+          
+          // Append content to the chosen div
+          if (!toolCallsStarted) {
+            initialReply += data.reply;
+          } else {
+            summaryReply += data.reply;
+          }
+
+          const combined = (!toolCallsStarted ? initialReply : summaryReply);
+
+          if (window.marked && window.DOMPurify) {
+            const rawHtml = window.marked.parse(combined);
+            const cleanHtml = window.DOMPurify.sanitize(rawHtml);
+            targetDiv.innerHTML = cleanHtml;
+            if (window.hljs) {
+              targetDiv.querySelectorAll('pre code').forEach((block) => {
+                window.hljs.highlightElement(block);
+              });
+            }
+          } else {
+            targetDiv.textContent = combined;
+          }
+        }
+        
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+      
+      // Check for save offer
+      if (data.save_offer) {
+        saveOffer = data.save_offer;
+      }
     };
     window.addEventListener('chat-chunk', chunkHandler);
 
-    // Send simplified request to backend
+    // Send request to backend
     console.log('[Chat] Sending request to backend...');
-    const response = await window.electronAPI.sendChatMessage({
-      message,
-      session_id: state.currentSessionId,
-      toggle_states: toggleStates,
-      dynamic_content: dynamicContent,
-      function_id: functionId
-    });
+    const response = await window.electronAPI.sendChatMessage(requestData);
 
     // Remove the chunk handler
     window.removeEventListener('chat-chunk', chunkHandler);
 
     console.log('[Chat] Received response from backend:', response);
-
-    if (!response) {
-      console.error('[Chat] No response received from backend');
-      throw new Error('No response received from backend');
-    }
-
-    if (!response.hasOwnProperty('reply')) {
-      console.error('[Chat] Response missing reply field - response:', response);
-      throw new Error('Backend response missing reply field');
-    }
-
-    if (response.reply === '' || response.reply == null) {
-      console.error('[Chat] Backend returned empty reply');
-      addMessage('⚠️ The AI assistant returned an empty response. This usually means the OpenAI API key is not configured or there was an error during the API call. Please check the backend logs.', false);
-      return;
-    }
-
+    
     // Update current session ID if it's a new session
     if (response.session_id && response.session_id !== state.currentSessionId) {
       state.currentSessionId = response.session_id;
@@ -291,20 +403,13 @@ export async function sendMessage() {
     // Refresh chat sessions to get updated names
     await refreshChatSessions();
 
-    // Final update with complete markdown
-    if (window.marked && window.DOMPurify) {
-      const rawHtml = window.marked.parse(response.reply);
-      const cleanHtml = window.DOMPurify.sanitize(rawHtml);
-      tempMessageDiv.innerHTML = cleanHtml;
-      tempMessageDiv.className = 'message assistant';
-      if (window.hljs) {
-        tempMessageDiv.querySelectorAll('pre code').forEach((block) => {
-          window.hljs.highlightElement(block);
-        });
-      }
-    } else {
-      tempMessageDiv.textContent = response.reply;
+    // Show save offer if available
+    if (saveOffer) {
+      setTimeout(() => {
+        addSaveOfferPrompt(saveOffer);
+      }, 500);
     }
+
   } catch (error) {
     console.error('[Chat] Error sending message:', error);
     console.error('[Chat] Error details:', {
@@ -316,6 +421,78 @@ export async function sendMessage() {
   }
 }
 
+// Add save offer prompt for AI analysis results
+function addSaveOfferPrompt(saveOffer) {
+  const chatMessages = document.getElementById('chat-messages');
+  const promptDiv = document.createElement('div');
+  promptDiv.className = 'message assistant save-offer-prompt';
+  
+  promptDiv.innerHTML = `
+    <div class="save-offer-container">
+      <h4>💾 Save Analysis to Notes</h4>
+      <p><strong>Title:</strong> ${saveOffer.suggested_title}</p>
+      <p><strong>Type:</strong> ${saveOffer.analysis_type.replace('_', ' ')}</p>
+      <div class="save-offer-buttons">
+        <button class="save-offer-btn save" onclick="saveAnalysisToNotes('${encodeURIComponent(JSON.stringify(saveOffer))}', this)">Save to Notes</button>
+        <button class="save-offer-btn dismiss" onclick="dismissSaveOffer(this)">Don't Save</button>
+      </div>
+    </div>
+  `;
+  
+  chatMessages.appendChild(promptDiv);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// Global functions for save offer handling
+window.saveAnalysisToNotes = async function(encodedOffer, buttonElement) {
+  try {
+    const saveOffer = JSON.parse(decodeURIComponent(encodedOffer));
+    
+    console.log('[Chat] Saving analysis to notes:', saveOffer);
+    
+    // Call the API to save to notes
+    const response = await fetch('http://localhost:8000/api/chat/save-analysis', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        analysis_type: saveOffer.analysis_type,
+        content: saveOffer.formatted_content,
+        metadata: saveOffer.metadata,
+        custom_title: saveOffer.suggested_title
+      })
+    });
+    
+    const result = await response.json();
+    
+    const promptDiv = buttonElement.closest('.save-offer-prompt');
+    if (result.success) {
+      promptDiv.innerHTML = '<p>✅ Analysis saved to notes successfully!</p>';
+    } else {
+      promptDiv.innerHTML = '<p>❌ Failed to save to notes. Please try again.</p>';
+    }
+    
+    setTimeout(() => {
+      promptDiv.remove();
+    }, 3000);
+    
+  } catch (error) {
+    console.error('[Chat] Error saving analysis to notes:', error);
+    const promptDiv = buttonElement.closest('.save-offer-prompt');
+    promptDiv.innerHTML = '<p>❌ Error saving to notes. Please try again.</p>';
+    
+    setTimeout(() => {
+      promptDiv.remove();
+    }, 3000);
+  }
+};
+
+window.dismissSaveOffer = function(buttonElement) {
+  const promptDiv = buttonElement.closest('.save-offer-prompt');
+  promptDiv.remove();
+};
+
 // Setup chat event listeners
 export function setupChatEventListeners() {
   const chatInput = document.getElementById('chat-input');
@@ -323,13 +500,16 @@ export function setupChatEventListeners() {
   const chatSessionsSelect = document.getElementById('chat-sessions-select');
   const deleteChatBtn = document.getElementById('delete-chat-btn');
   
-  chatInput.addEventListener('keypress', (e) => {
+  // Handle keyboard events
+  chatInput.addEventListener('keydown', (e) => {
+    // Handle Enter key for sending messages
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
   });
   
+  // Auto-resize textarea
   chatInput.addEventListener('input', function() {
     this.style.height = 'auto';
     this.style.height = (this.scrollHeight) + 'px';
@@ -403,6 +583,78 @@ export function setupContextToggles() {
       }
     });
   });
+  
+  // Update visibility based on context mode
+  updateContextTogglesVisibility();
+}
+
+// Function to setup context mode toggle
+export function setupContextModeToggle() {
+  const toggleButton = document.getElementById('context-mode-toggle');
+  const loadFileBtn = document.getElementById('load-file-btn');
+  
+  if (!toggleButton) {
+    console.error('[Chat] Context mode toggle button not found');
+    return;
+  }
+  
+  toggleButton.addEventListener('click', () => {
+    // Toggle between modes
+    contextMode = contextMode === 'manual' ? 'ai' : 'manual';
+    
+    // Update button appearance
+    updateToggleButtonAppearance();
+    
+    // Update context toggles visibility
+    updateContextTogglesVisibility();
+    
+    // Update chat input placeholder
+    updateChatInputPlaceholder();
+    
+    console.log('[Chat] Context mode changed to:', contextMode);
+  });
+  
+  // Initial setup
+  updateToggleButtonAppearance();
+  updateChatInputPlaceholder();
+}
+
+// Function to update toggle button appearance
+function updateToggleButtonAppearance() {
+  const toggleButton = document.getElementById('context-mode-toggle');
+  const toggleText = toggleButton.querySelector('.toggle-text');
+  
+  if (contextMode === 'manual') {
+    toggleButton.setAttribute('data-mode', 'manual');
+    toggleText.textContent = 'Manual Context';
+  } else {
+    toggleButton.setAttribute('data-mode', 'ai');
+    toggleText.textContent = 'Auto Context';
+  }
+}
+
+// Function to update context toggles visibility
+function updateContextTogglesVisibility() {
+  const contextToggles = document.querySelector('.context-toggles');
+  
+  if (contextMode === 'manual') {
+    contextToggles.style.display = 'block';
+    contextToggles.style.opacity = '1';
+  } else {
+    contextToggles.style.display = 'none';
+    contextToggles.style.opacity = '0.5';
+  }
+}
+
+// Function to update chat input placeholder
+function updateChatInputPlaceholder() {
+  const chatInput = document.getElementById('chat-input');
+  
+  if (contextMode === 'manual') {
+    chatInput.placeholder = 'Ask about the current function...';
+  } else {
+    chatInput.placeholder = 'Describe what you want to analyze or search for...';
+  }
 }
 
 // Function to send current function context to backend for caching

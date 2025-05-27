@@ -9,6 +9,7 @@ class ChatRequest(BaseModel):
     toggle_states: Dict[str, bool] = {}
     dynamic_content: Optional[Dict[str, Any]] = None
     function_id: Optional[str] = None  # For associating session with function
+    use_ai_tools: bool = False  # Whether to use AI interaction engine
 
 class ChatResponse(BaseModel):
     reply: str
