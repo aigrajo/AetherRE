@@ -251,6 +251,85 @@
   left: 0;
 }
 
+/* Context Mode Container */
+.context-mode-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+/* Help Icon */
+.help-icon {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.help-icon:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.help-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Tooltip */
+.help-icon::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: rgba(20, 20, 20, 0.95);
+  backdrop-filter: blur(8px);
+  color: var(--text-primary);
+  padding: 12px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-line;
+  width: max-content;
+  max-width: 320px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(42, 42, 42, 0.8);
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  z-index: 1000;
+  margin-top: 8px;
+  pointer-events: none;
+}
+
+.help-icon::before {
+  content: '';
+  position: absolute;
+  top: 100%;
+  right: 12px;
+  border: 6px solid transparent;
+  border-bottom-color: rgba(20, 20, 20, 0.95);
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  z-index: 1001;
+  margin-top: 2px;
+}
+
+.help-icon:hover::after,
+.help-icon:hover::before {
+  opacity: 1;
+  visibility: visible;
+}
+
 /* File Actions */
 .file-actions {
   display: flex;

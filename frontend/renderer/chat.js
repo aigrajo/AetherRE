@@ -598,6 +598,7 @@ export function setupContextToggles() {
 // Function to setup context mode toggle
 export function setupContextModeToggle() {
   const toggleButton = document.getElementById('context-mode-toggle');
+  const helpButton = document.getElementById('context-mode-help');
   const loadFileBtn = document.getElementById('load-file-btn');
   
   if (!toggleButton) {
@@ -618,8 +619,16 @@ export function setupContextModeToggle() {
     // Update chat input placeholder
     updateChatInputPlaceholder();
     
+    // Update help tooltip
+    updateHelpTooltip();
+    
     console.log('[Chat] Context mode changed to:', contextMode);
   });
+  
+  // Setup help button tooltip
+  if (helpButton) {
+    updateHelpTooltip();
+  }
   
   // Initial setup
   updateToggleButtonAppearance();
@@ -662,6 +671,34 @@ function updateChatInputPlaceholder() {
   } else {
     chatInput.placeholder = 'Describe what you want to analyze or search for...';
   }
+}
+
+// Function to update help tooltip content
+function updateHelpTooltip() {
+  const helpButton = document.getElementById('context-mode-help');
+  if (!helpButton) return;
+  
+  let tooltipContent = '';
+  
+  if (contextMode === 'manual') {
+    tooltipContent = `Manual Context Mode:
+• You control what information is sent to AI
+• Uses context toggles to select data
+• Lower API usage and token consumption
+• More predictable costs
+• Best for focused analysis`;
+  } else {
+    tooltipContent = `Auto Context Mode:
+• AI automatically determines what tools to use
+• Iterative analysis with multiple API calls
+• ⚠️ WARNING: 5-10x higher token usage
+• Significantly increased API costs
+• Best for comprehensive exploration
+
+Use with caution - can consume many tokens!`;
+  }
+  
+  helpButton.setAttribute('data-tooltip', tooltipContent);
 }
 
 // Function to send current function context to backend for caching
