@@ -12,24 +12,309 @@ export function addMessage(content, isUser = false) {
   if (isUser) {
     messageDiv.textContent = content;
   } else {
+    // Create content wrapper
+    const contentWrapper = document.createElement('div');
+    contentWrapper.className = 'message-content';
+    
     // Render markdown for assistant responses, sanitize, and highlight
     if (window.marked && window.DOMPurify) {
       const rawHtml = window.marked.parse(content);
       const cleanHtml = window.DOMPurify.sanitize(rawHtml);
-      messageDiv.innerHTML = cleanHtml;
+      contentWrapper.innerHTML = cleanHtml;
       if (window.hljs) {
         // Highlight code blocks
-        messageDiv.querySelectorAll('pre code').forEach((block) => {
+        contentWrapper.querySelectorAll('pre code').forEach((block) => {
           window.hljs.highlightElement(block);
         });
       }
     } else {
-      messageDiv.textContent = content;
+      contentWrapper.textContent = content;
     }
+    
+    // Create action buttons container
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'message-actions';
+    
+    // Copy button
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'message-action-btn copy-btn';
+    copyBtn.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M16 1H4C2.9 1 2 1.9 2 3V17H4V3H16V1ZM19 5H8C6.9 5 6 5.9 6 7V21C6 22.1 6.9 23 8 23H19C20.1 23 21 22.1 21 21V7C21 5.9 20.1 5 19 5ZM19 21H8V7H19V21Z" fill="currentColor"/>
+      </svg>
+      Copy
+    `;
+    copyBtn.title = 'Copy message to clipboard';
+    copyBtn.addEventListener('click', () => copyMessageToClipboard(content, copyBtn));
+    
+    // Add to note button
+    const addToNoteBtn = document.createElement('button');
+    addToNoteBtn.className = 'message-action-btn add-to-note-btn';
+    addToNoteBtn.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2ZM18 20H6V4H13V9H18V20Z" fill="currentColor"/>
+      </svg>
+      Add to Note
+    `;
+    addToNoteBtn.title = 'Add this message to the current function note';
+    addToNoteBtn.addEventListener('click', () => addMessageToNote(content, addToNoteBtn));
+    
+    // Add buttons to actions container
+    actionsDiv.appendChild(copyBtn);
+    actionsDiv.appendChild(addToNoteBtn);
+    
+    // Add content and actions to message
+    messageDiv.appendChild(contentWrapper);
+    messageDiv.appendChild(actionsDiv);
   }
   
   chatMessages.appendChild(messageDiv);
   chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// Copy message content to clipboard
+async function copyMessageToClipboard(content, buttonElement) {
+  try {
+    // Check if clipboard API is available
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(content);
+    } else {
+      // Fallback for older browsers or when clipboard API is not available
+      const textArea = document.createElement('textarea');
+      textArea.value = content;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+    }
+    
+    // Provide visual feedback
+    const originalText = buttonElement.innerHTML;
+    buttonElement.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M9 16.17L4.83 12L3.41 13.41L9 19L21 7L19.59 5.59L9 16.17Z" fill="currentColor"/>
+      </svg>
+      Copied!
+    `;
+    buttonElement.style.color = '#4ade80';
+    
+    // Revert back after 2 seconds
+    setTimeout(() => {
+      buttonElement.innerHTML = originalText;
+      buttonElement.style.color = '';
+    }, 2000);
+    
+  } catch (error) {
+    console.error('[Chat] Error copying to clipboard:', error);
+    
+    // Show error feedback
+    const originalText = buttonElement.innerHTML;
+    buttonElement.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M19 6.41L17.59 5L12 10.59L6.41 5L5 6.41L10.59 12L5 17.59L6.41 19L12 13.41L17.59 19L19 17.59L13.41 12L19 6.41Z" fill="currentColor"/>
+      </svg>
+      Failed
+    `;
+    buttonElement.style.color = '#ef4444';
+    
+    setTimeout(() => {
+      buttonElement.innerHTML = originalText;
+      buttonElement.style.color = '';
+    }, 2000);
+  }
+}
+
+// Add message content to the current function's note
+async function addMessageToNote(content, buttonElement) {
+  try {
+    // Import getCurrentContext from TagNotePanel
+    const { getCurrentContext } = await import('./TagNotePanel.js');
+    const context = await getCurrentContext();
+    
+    if (!context || !context.binaryName || !context.functionId) {
+      // Show error feedback
+      const originalText = buttonElement.innerHTML;
+      buttonElement.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M19 6.41L17.59 5L12 10.59L6.41 5L5 6.41L10.59 12L5 17.59L6.41 19L12 13.41L17.59 19L19 17.59L13.41 12L19 6.41Z" fill="currentColor"/>
+        </svg>
+        No Function
+      `;
+      buttonElement.style.color = '#ef4444';
+      
+      setTimeout(() => {
+        buttonElement.innerHTML = originalText;
+        buttonElement.style.color = '';
+      }, 3000);
+      return;
+    }
+    
+    // Convert markdown to plain text
+    let plainTextContent;
+    if (window.marked && window.DOMPurify) {
+      try {
+        // Convert markdown to HTML
+        const html = window.marked.parse(content);
+        const cleanHtml = window.DOMPurify.sanitize(html);
+        
+        // Create temp element to extract plain text
+        const temp = document.createElement('div');
+        temp.innerHTML = cleanHtml;
+        
+        // Extract plain text and clean up excessive whitespace
+        plainTextContent = temp.textContent || temp.innerText || '';
+        // Clean up multiple newlines and excessive spacing
+        plainTextContent = plainTextContent
+          .replace(/\n\s*\n\s*\n/g, '\n\n') // Replace 3+ newlines with 2
+          .replace(/[ \t]+/g, ' ') // Replace multiple spaces/tabs with single space
+          .trim();
+      } catch (error) {
+        console.warn('[Chat] Error converting markdown to plain text:', error);
+        plainTextContent = content; // Fallback to original content
+      }
+    } else {
+      plainTextContent = content; // Fallback if markdown tools aren't available
+    }
+    
+    // Get current note content
+    const noteResponse = await fetch(`http://localhost:8000/api/notes/${context.binaryName}/${context.functionId}`);
+    if (!noteResponse.ok) {
+      throw new Error(`Failed to get current note: ${noteResponse.statusText}`);
+    }
+    
+    const noteData = await noteResponse.json();
+    const currentNoteContent = noteData.content || '';
+    
+    // Prepare the content to append
+    const timestamp = new Date().toLocaleString();
+    const separator = currentNoteContent ? '\n\n---\n\n' : '';
+    const chatContent = `${separator}AI Chat Response (${timestamp}):\n${plainTextContent}`;
+    
+    // Append to existing note content
+    const updatedContent = currentNoteContent + chatContent;
+    
+    // Save the updated note
+    const saveResponse = await fetch(`http://localhost:8000/api/notes/${context.binaryName}/${context.functionId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ content: updatedContent })
+    });
+    
+    if (!saveResponse.ok) {
+      throw new Error(`Failed to save note: ${saveResponse.statusText}`);
+    }
+    
+    // Provide visual feedback
+    const originalText = buttonElement.innerHTML;
+    buttonElement.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M9 16.17L4.83 12L3.41 13.41L9 19L21 7L19.59 5.59L9 16.17Z" fill="currentColor"/>
+      </svg>
+      Added!
+    `;
+    buttonElement.style.color = '#4ade80';
+    
+    // Trigger note reload in the note editor if it's for the current function
+    const loadNoteEvent = new CustomEvent('load-note', {
+      detail: {
+        binaryName: context.binaryName,
+        functionId: context.functionId
+      }
+    });
+    document.dispatchEvent(loadNoteEvent);
+    
+    // Revert back after 2 seconds
+    setTimeout(() => {
+      buttonElement.innerHTML = originalText;
+      buttonElement.style.color = '';
+    }, 2000);
+    
+  } catch (error) {
+    console.error('[Chat] Error adding to note:', error);
+    
+    // Show error feedback
+    const originalText = buttonElement.innerHTML;
+    buttonElement.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M19 6.41L17.59 5L12 10.59L6.41 5L5 6.41L10.59 12L5 17.59L6.41 19L12 13.41L17.59 19L19 17.59L13.41 12L19 6.41Z" fill="currentColor"/>
+      </svg>
+      Failed
+    `;
+    buttonElement.style.color = '#ef4444';
+    
+    setTimeout(() => {
+      buttonElement.innerHTML = originalText;
+      buttonElement.style.color = '';
+    }, 3000);
+  }
+}
+
+// Add action buttons to an existing assistant message div
+function addActionButtonsToMessageDiv(messageDiv, content) {
+  // Skip if buttons already exist or if this is not an assistant message
+  if (messageDiv.querySelector('.message-actions') || !messageDiv.classList.contains('assistant')) {
+    return;
+  }
+  
+  // Skip thinking, tool-call, and save-offer-prompt messages
+  if (messageDiv.classList.contains('thinking') || 
+      messageDiv.classList.contains('tool-call') || 
+      messageDiv.classList.contains('save-offer-prompt')) {
+    return;
+  }
+  
+  // Wrap existing content in content wrapper if not already wrapped
+  let contentWrapper = messageDiv.querySelector('.message-content');
+  if (!contentWrapper) {
+    contentWrapper = document.createElement('div');
+    contentWrapper.className = 'message-content';
+    // Move all existing content to the wrapper
+    while (messageDiv.firstChild) {
+      contentWrapper.appendChild(messageDiv.firstChild);
+    }
+    messageDiv.appendChild(contentWrapper);
+  }
+  
+  // Create action buttons container
+  const actionsDiv = document.createElement('div');
+  actionsDiv.className = 'message-actions';
+  
+  // Copy button
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'message-action-btn copy-btn';
+  copyBtn.innerHTML = `
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M16 1H4C2.9 1 2 1.9 2 3V17H4V3H16V1ZM19 5H8C6.9 5 6 5.9 6 7V21C6 22.1 6.9 23 8 23H19C20.1 23 21 22.1 21 21V7C21 5.9 20.1 5 19 5ZM19 21H8V7H19V21Z" fill="currentColor"/>
+    </svg>
+    Copy
+  `;
+  copyBtn.title = 'Copy message to clipboard';
+  copyBtn.addEventListener('click', () => copyMessageToClipboard(content, copyBtn));
+  
+  // Add to note button
+  const addToNoteBtn = document.createElement('button');
+  addToNoteBtn.className = 'message-action-btn add-to-note-btn';
+  addToNoteBtn.innerHTML = `
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2ZM18 20H6V4H13V9H18V20Z" fill="currentColor"/>
+    </svg>
+    Add to Note
+  `;
+  addToNoteBtn.title = 'Add this message to the current function note';
+  addToNoteBtn.addEventListener('click', () => addMessageToNote(content, addToNoteBtn));
+  
+  // Add buttons to actions container
+  actionsDiv.appendChild(copyBtn);
+  actionsDiv.appendChild(addToNoteBtn);
+  
+  // Add actions to message
+  messageDiv.appendChild(actionsDiv);
 }
 
 // Initialize chat session
@@ -399,6 +684,14 @@ export async function sendMessage() {
     window.removeEventListener('chat-chunk', chunkHandler);
 
     console.log('[Chat] Received response from backend:', response);
+    
+    // Add action buttons to completed assistant messages
+    if (initialResponseDiv && initialReply) {
+      addActionButtonsToMessageDiv(initialResponseDiv, initialReply);
+    }
+    if (summaryDiv && summaryReply) {
+      addActionButtonsToMessageDiv(summaryDiv, summaryReply);
+    }
     
     // Update current session ID if it's a new session
     if (response.session_id && response.session_id !== state.currentSessionId) {
