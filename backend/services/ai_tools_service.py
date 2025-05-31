@@ -319,14 +319,49 @@ class AIToolsService:
             incoming = xrefs.get('incoming', [])
             outgoing = xrefs.get('outgoing', [])
             
-            result = f"Cross-references:\n"
-            result += f"Incoming calls ({len(incoming)}):\n"
-            for ref in incoming[:10]:
-                result += f"- {ref}\n"
+            result = f"Cross-references:\n\n"
             
+            # Format incoming calls
+            result += f"Incoming calls ({len(incoming)}):\n"
+            if incoming:
+                for i, ref in enumerate(incoming[:10]):
+                    if isinstance(ref, dict):
+                        source = ref.get('source_func', 'Unknown')
+                        ref_type = ref.get('type', 'unknown')
+                        context_info = ref.get('context', '')
+                        result += f"- {source} ({ref_type})"
+                        if context_info:
+                            result += f" - {context_info}"
+                        result += "\n"
+                    else:
+                        result += f"- {ref}\n"
+                    
+                if len(incoming) > 10:
+                    result += f"... and {len(incoming) - 10} more incoming calls\n"
+            else:
+                result += "- No incoming calls found\n"
+            
+            result += "\n"
+            
+            # Format outgoing calls
             result += f"Outgoing calls ({len(outgoing)}):\n"
-            for ref in outgoing[:10]:
-                result += f"- {ref}\n"
+            if outgoing:
+                for i, ref in enumerate(outgoing[:10]):
+                    if isinstance(ref, dict):
+                        target = ref.get('target_func', 'Unknown')
+                        ref_type = ref.get('type', 'unknown')
+                        context_info = ref.get('context', '')
+                        result += f"- {target} ({ref_type})"
+                        if context_info:
+                            result += f" - {context_info}"
+                        result += "\n"
+                    else:
+                        result += f"- {ref}\n"
+                        
+                if len(outgoing) > 10:
+                    result += f"... and {len(outgoing) - 10} more outgoing calls\n"
+            else:
+                result += "- No outgoing calls found\n"
             
             return result
         return "Cross-references not available"
@@ -436,10 +471,10 @@ class AIToolsService:
                 'function_name': found_function.get('name', 'Unknown'),
                 'address': found_function.get('address', 'Unknown'),
                 'binary_name': self.current_binary_name,
-                'assembly': found_function.get('instructions', []),
-                'variables': found_function.get('variables', []),
+                'assembly': found_function.get('assembly', []),
+                'variables': found_function.get('local_variables', []),
                 'xrefs': found_function.get('xrefs', {}),
-                'strings': found_function.get('strings', []),
+                'strings': found_function.get('local_strings', []),
                 'cfg': found_function.get('cfg', {}),
                 'pseudocode': found_function.get('pseudocode', '')
             })
@@ -452,7 +487,7 @@ class AIToolsService:
         address = found_function.get('address', 'Unknown')
         
         return f"Jumped to function: {func_name} at {address}. You can now analyze this function with other tools."
-    
+
     async def _get_imports(self) -> str:
         """Get imported functions and libraries for the entire binary"""
         if not self.current_binary_name:

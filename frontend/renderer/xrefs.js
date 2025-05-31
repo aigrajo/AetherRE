@@ -35,6 +35,7 @@ export function handleXRefRowClick(row, targetFunc, event) {
 }
 
 // Fetch cross-references from backend
+/*
 async function fetchXRefs(functionObj) {
   const direction = document.getElementById('xref-direction-filter').value;
   const sortBy = document.getElementById('xref-sort-by').value;
@@ -52,9 +53,10 @@ async function fetchXRefs(functionObj) {
   }
   return await response.json();
 }
+*/
 
 // Cross References Tab Functions
-export async function updateXRefsTab(functionObj) {
+export function updateXRefsTab(functionObj) {
   console.log('updateXRefsTab called with:', functionObj);
 
   if (!functionObj) {
@@ -72,17 +74,9 @@ export async function updateXRefsTab(functionObj) {
   incomingTable.innerHTML = '';
   outgoingTable.innerHTML = '';
 
-  // Fetch xrefs from backend
-  let xrefs;
-  try {
-    xrefs = await fetchXRefs(functionObj);
-  } catch (err) {
-    console.error('Error fetching xrefs:', err);
-    incomingTable.innerHTML = '<tr><td colspan="5">No cross-reference data available</td></tr>';
-    outgoingTable.innerHTML = '<tr><td colspan="5">No cross-reference data available</td></tr>';
-    return;
-  }
-
+  // Get xrefs from function object directly
+  let xrefs = functionObj.xrefs || { incoming: [], outgoing: [] };
+  
   // Apply filters
   const directionFilter = document.getElementById('xref-direction-filter').value;
 
@@ -94,7 +88,7 @@ export async function updateXRefsTab(functionObj) {
   if (incomingSection.style.display !== 'none') {
     const incomingRefs = xrefs.incoming || [];
     if (incomingRefs.length === 0) {
-      incomingTable.innerHTML = '<tr><td colspan="5">No incoming references found</td></tr>';
+      incomingTable.innerHTML = '<tr><td colspan="4">No incoming references found</td></tr>';
     } else {
       let lastAddr = null;
       incomingRefs.forEach(ref => {
@@ -131,7 +125,7 @@ export async function updateXRefsTab(functionObj) {
   if (outgoingSection.style.display !== 'none') {
     const outgoingRefs = xrefs.outgoing || [];
     if (outgoingRefs.length === 0) {
-      outgoingTable.innerHTML = '<tr><td colspan="5">No outgoing references found</td></tr>';
+      outgoingTable.innerHTML = '<tr><td colspan="4">No outgoing references found</td></tr>';
     } else {
       let lastAddr = null;
       outgoingRefs.forEach(ref => {
@@ -178,4 +172,4 @@ export function setupXRefFilters() {
       updateXRefsTab(window.currentFunction);
     }
   });
-} 
+}

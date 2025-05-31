@@ -128,6 +128,60 @@ def extract_assembly(func):
         assembly.append(asm_data)
     return assembly
 
+def extract_xrefs(func):
+    """Extract cross-references for a function"""
+    xrefs = {
+        "incoming": [],
+        "outgoing": []
+    }
+    
+    # Get incoming references to this function
+    reference_manager = currentProgram.getReferenceManager()
+    
+    # Incoming references (calls TO this function)
+    for ref in reference_manager.getReferencesTo(func.getEntryPoint()):
+        if ref.getReferenceType().isCall():
+            # Get the function that contains the source address
+            source_func = currentProgram.getFunctionManager().getFunctionContaining(ref.getFromAddress())
+            if source_func:
+                xref_data = {
+                    "source_func": str(source_func.getEntryPoint()),
+                    "target_func": str(func.getEntryPoint()),
+                    "type": "direct_call",
+                    "offset": int(ref.getFromAddress().getOffset() - source_func.getEntryPoint().getOffset()),
+                    "context": str(ref.getFromAddress()) + " -> " + str(ref.getToAddress())
+                }
+                xrefs["incoming"].append(xref_data)
+    
+    # Outgoing references (calls FROM this function)
+    listing = currentProgram.getListing()
+    for instr in listing.getInstructions(func.getBody(), True):
+        for ref in instr.getReferencesFrom():
+            if ref.getReferenceType().isCall():
+                # Get the target function
+                target_func = currentProgram.getFunctionManager().getFunctionAt(ref.getToAddress())
+                if target_func:
+                    xref_data = {
+                        "source_func": str(func.getEntryPoint()),
+                        "target_func": str(target_func.getEntryPoint()),
+                        "type": "direct_call",
+                        "offset": int(instr.getAddress().getOffset() - func.getEntryPoint().getOffset()),
+                        "context": str(instr.getAddress()) + " -> " + str(ref.getToAddress())
+                    }
+                    xrefs["outgoing"].append(xref_data)
+                else:
+                    # External or indirect call
+                    xref_data = {
+                        "source_func": str(func.getEntryPoint()),
+                        "target_func": str(ref.getToAddress()),
+                        "type": "indirect_call" if ref.getReferenceType().isIndirect() else "external_call",
+                        "offset": int(instr.getAddress().getOffset() - func.getEntryPoint().getOffset()),
+                        "context": str(instr.getAddress()) + " -> " + str(ref.getToAddress())
+                    }
+                    xrefs["outgoing"].append(xref_data)
+    
+    return xrefs
+
 def compute_cfg_layout_in_ghidra(cfg_data):
     """
     Compute CFG layout within Ghidra environment.
@@ -370,6 +424,7 @@ def run():
         local_vars = extract_local_variables(func)
         local_strings = extract_local_strings(func)
         assembly = extract_assembly(func)
+        xrefs = extract_xrefs(func)
         cfg = extract_cfg(func)  # Extract CFG data
         
         func_data = {
@@ -382,6 +437,7 @@ def run():
             "local_variables": local_vars,
             "local_strings": local_strings,
             "assembly": assembly,
+            "xrefs": xrefs,
             "cfg": cfg  # Add CFG data to the output
         }
         functions.append(func_data)
