@@ -203,6 +203,43 @@ class AIToolsService:
                     "required": ["function_id"]
                 },
                 handler=self._jump_to_function
+            ),
+            AITool(
+                name="get_imports",
+                description="Get imported functions and libraries for the entire binary",
+                parameters={"type": "object", "properties": {}, "required": []},
+                handler=self._get_imports
+            ),
+            AITool(
+                name="search_binary",
+                description="Search for strings, constants, or patterns across the entire binary",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "What to search for"},
+                        "search_type": {"type": "string", "description": "Type of search: 'strings', 'constants', or 'instructions'", "enum": ["strings", "constants", "instructions"]}
+                    },
+                    "required": ["query", "search_type"]
+                },
+                handler=self._search_binary
+            ),
+            AITool(
+                name="analyze_address",
+                description="Get detailed information about what exists at a specific memory address",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "address": {"type": "string", "description": "Memory address to analyze (e.g., '0x401000')"}
+                    },
+                    "required": ["address"]
+                },
+                handler=self._analyze_address
+            ),
+            AITool(
+                name="get_constants",
+                description="Extract numeric constants and magic numbers from current function",
+                parameters={"type": "object", "properties": {}, "required": []},
+                handler=self._get_constants
             )
         ]
         
@@ -415,6 +452,421 @@ class AIToolsService:
         address = found_function.get('address', 'Unknown')
         
         return f"Jumped to function: {func_name} at {address}. You can now analyze this function with other tools."
+    
+    async def _get_imports(self) -> str:
+        """Get imported functions and libraries for the entire binary"""
+        if not self.current_binary_name:
+            return "No binary context available"
+        
+        all_functions = self.get_binary_functions()
+        
+        if not all_functions:
+            return f"No binary data available for {self.current_binary_name}"
+        
+        # Look for imports in the binary data
+        # Check if we have imports data structure
+        imports = set()
+        libraries = set()
+        
+        # Parse through functions looking for external calls/imports
+        for func in all_functions:
+            # Check assembly instructions for call instructions to external functions
+            instructions = func.get('instructions', [])
+            for instr in instructions:
+                mnemonic = instr.get('mnemonic', '').lower()
+                operands = instr.get('operands', '')
+                
+                if mnemonic in ['call', 'jmp']:
+                    # Look for external function calls (usually have specific patterns)
+                    if '@' in operands or '.dll' in operands.lower():
+                        imports.add(operands)
+                    elif operands.startswith('KERNEL32.') or operands.startswith('USER32.') or operands.startswith('NTDLL.'):
+                        imports.add(operands)
+                        library = operands.split('.')[0]
+                        libraries.add(library)
+            
+            # Also check xrefs for external references
+            xrefs = func.get('xrefs', {})
+            outgoing = xrefs.get('outgoing', [])
+            for ref in outgoing:
+                if isinstance(ref, str) and ('.' in ref and any(lib in ref.upper() for lib in ['KERNEL32', 'USER32', 'NTDLL', 'ADVAPI32', 'WS2_32'])):
+                    imports.add(ref)
+                    if '.' in ref:
+                        library = ref.split('.')[0]
+                        libraries.add(library)
+        
+        result = f"Binary Imports Analysis:\n"
+        
+        if libraries:
+            result += f"\nLibraries ({len(libraries)}):\n"
+            for lib in sorted(libraries)[:10]:
+                result += f"- {lib}\n"
+            if len(libraries) > 10:
+                result += f"... and {len(libraries) - 10} more libraries\n"
+        
+        if imports:
+            result += f"\nImported Functions ({len(imports)}):\n"
+            for imp in sorted(imports)[:15]:
+                result += f"- {imp}\n"
+            if len(imports) > 15:
+                result += f"... and {len(imports) - 15} more imports\n"
+        
+        if not imports and not libraries:
+            result += "No clear import patterns detected in available data.\n"
+            result += "This could indicate a stripped binary or limited data extraction."
+        
+        return result
+    
+    async def _search_binary(self, query: str, search_type: str) -> str:
+        """Search for strings, constants, or patterns across the entire binary"""
+        if not self.current_binary_name:
+            return "No binary context available"
+        
+        all_functions = self.get_binary_functions()
+        
+        if not all_functions:
+            return f"No binary data available for {self.current_binary_name}"
+        
+        query_lower = query.lower()
+        matches = []
+        
+        if search_type == "strings":
+            # Search for string matches across all functions
+            for func in all_functions:
+                func_name = func.get('name', 'Unknown')
+                func_addr = func.get('address', 'Unknown')
+                
+                # Search in strings array
+                strings = func.get('strings', [])
+                for string_obj in strings:
+                    string_val = string_obj.get('value', '') if isinstance(string_obj, dict) else str(string_obj)
+                    if query_lower in string_val.lower():
+                        matches.append(f"{func_name} ({func_addr}): \"{string_val}\"")
+                
+                # Search in pseudocode
+                pseudocode = func.get('pseudocode', '')
+                if query_lower in pseudocode.lower():
+                    # Find the line containing the query
+                    lines = pseudocode.split('\n')
+                    for i, line in enumerate(lines):
+                        if query_lower in line.lower():
+                            matches.append(f"{func_name} ({func_addr}): Line {i+1}: {line.strip()}")
+                            if len(matches) >= 20:  # Limit matches per function
+                                break
+        
+        elif search_type == "constants":
+            # Search for numeric constants
+            import re
+            for func in all_functions:
+                func_name = func.get('name', 'Unknown')
+                func_addr = func.get('address', 'Unknown')
+                
+                # Search in assembly instructions
+                instructions = func.get('instructions', [])
+                for instr in instructions:
+                    operands = instr.get('operands', '')
+                    if query in operands:
+                        matches.append(f"{func_name} ({func_addr}): {instr.get('address', '')}: {instr.get('mnemonic', '')} {operands}")
+                
+                # Search in pseudocode for numeric values
+                pseudocode = func.get('pseudocode', '')
+                if query in pseudocode:
+                    lines = pseudocode.split('\n')
+                    for i, line in enumerate(lines):
+                        if query in line:
+                            matches.append(f"{func_name} ({func_addr}): Line {i+1}: {line.strip()}")
+        
+        elif search_type == "instructions":
+            # Search for instruction patterns
+            for func in all_functions:
+                func_name = func.get('name', 'Unknown')
+                func_addr = func.get('address', 'Unknown')
+                
+                instructions = func.get('instructions', [])
+                for instr in instructions:
+                    mnemonic = instr.get('mnemonic', '')
+                    operands = instr.get('operands', '')
+                    full_instr = f"{mnemonic} {operands}".lower()
+                    
+                    if query_lower in full_instr:
+                        matches.append(f"{func_name} ({func_addr}): {instr.get('address', '')}: {mnemonic} {operands}")
+        
+        # Format results
+        result = f"Search Results for \"{query}\" (type: {search_type}):\n\n"
+        
+        if not matches:
+            result += "No matches found.\n"
+            result += f"Searched across {len(all_functions)} functions in {self.current_binary_name}."
+        else:
+            result += f"Found {len(matches)} matches:\n"
+            for match in matches[:25]:  # Limit to 25 results
+                result += f"- {match}\n"
+            
+            if len(matches) > 25:
+                result += f"\n... and {len(matches) - 25} more matches (showing first 25)"
+        
+        return result
+    
+    async def _analyze_address(self, address: str) -> str:
+        """Get detailed information about what exists at a specific memory address"""
+        if not self.current_binary_name:
+            return "No binary context available"
+        
+        all_functions = self.get_binary_functions()
+        
+        if not all_functions:
+            return f"No binary data available for {self.current_binary_name}"
+        
+        # Normalize address format
+        if not address.startswith('0x'):
+            if address.startswith('0X'):
+                address = '0x' + address[2:]
+            else:
+                address = '0x' + address
+        
+        address_lower = address.lower()
+        result = f"Analysis of address {address}:\n\n"
+        
+        # Check if this address is a function entry point
+        for func in all_functions:
+            func_addr = func.get('address', '').lower()
+            if func_addr == address_lower:
+                func_name = func.get('name', 'Unknown')
+                result += f"✓ Function Entry Point: {func_name}\n"
+                result += f"  Function Size: {len(func.get('instructions', []))} instructions\n"
+                result += f"  Variables: {len(func.get('variables', []))} local variables\n"
+                result += f"  Strings: {len(func.get('strings', []))} string references\n"
+                
+                # Show first few instructions
+                instructions = func.get('instructions', [])
+                if instructions:
+                    result += f"  First few instructions:\n"
+                    for instr in instructions[:5]:
+                        result += f"    {instr.get('address', '')}: {instr.get('mnemonic', '')} {instr.get('operands', '')}\n"
+                
+                return result
+        
+        # Check if this address appears in any instruction operands
+        found_in_instructions = []
+        for func in all_functions:
+            func_name = func.get('name', 'Unknown')
+            func_addr = func.get('address', 'Unknown')
+            
+            instructions = func.get('instructions', [])
+            for instr in instructions:
+                operands = instr.get('operands', '')
+                if address_lower in operands.lower():
+                    found_in_instructions.append({
+                        'function': func_name,
+                        'function_addr': func_addr,
+                        'instruction_addr': instr.get('address', ''),
+                        'instruction': f"{instr.get('mnemonic', '')} {operands}"
+                    })
+        
+        if found_in_instructions:
+            result += f"✓ Referenced in {len(found_in_instructions)} instruction(s):\n"
+            for ref in found_in_instructions[:10]:
+                result += f"  {ref['function']} ({ref['function_addr']}): {ref['instruction_addr']}: {ref['instruction']}\n"
+            
+            if len(found_in_instructions) > 10:
+                result += f"  ... and {len(found_in_instructions) - 10} more references\n"
+        
+        # Check if this address appears in strings
+        found_in_strings = []
+        for func in all_functions:
+            func_name = func.get('name', 'Unknown')
+            func_addr = func.get('address', 'Unknown')
+            
+            strings = func.get('strings', [])
+            for string_obj in strings:
+                string_val = string_obj.get('value', '') if isinstance(string_obj, dict) else str(string_obj)
+                if address_lower in string_val.lower():
+                    found_in_strings.append(f"{func_name} ({func_addr}): \"{string_val}\"")
+        
+        if found_in_strings:
+            result += f"\n✓ Found in strings:\n"
+            for string_ref in found_in_strings[:5]:
+                result += f"  {string_ref}\n"
+        
+        # Check if address falls within any function's range
+        address_int = int(address, 16) if address.startswith('0x') else int(address, 16)
+        for func in all_functions:
+            func_addr_str = func.get('address', '')
+            if func_addr_str.startswith('0x'):
+                func_addr_int = int(func_addr_str, 16)
+                instructions = func.get('instructions', [])
+                
+                if instructions:
+                    # Estimate function size from instructions
+                    last_instr_addr = instructions[-1].get('address', func_addr_str)
+                    if last_instr_addr.startswith('0x'):
+                        last_addr_int = int(last_instr_addr, 16)
+                        
+                        if func_addr_int <= address_int <= last_addr_int + 10:  # +10 for instruction size
+                            result += f"\n✓ Address falls within function: {func.get('name', 'Unknown')} ({func_addr_str})\n"
+                            
+                            # Find the specific instruction at or near this address
+                            for instr in instructions:
+                                instr_addr = instr.get('address', '')
+                                if instr_addr.startswith('0x'):
+                                    instr_addr_int = int(instr_addr, 16)
+                                    if instr_addr_int == address_int:
+                                        result += f"  Exact instruction: {instr.get('mnemonic', '')} {instr.get('operands', '')}\n"
+                                        break
+                            break
+        
+        if "✓" not in result:
+            result += "❌ Address not found in available function data.\n"
+            result += "This could be:\n"
+            result += "- Data section address\n"
+            result += "- External library address\n"
+            result += "- Invalid/unmapped address\n"
+            result += "- Address outside analyzed functions\n"
+        
+        return result
+    
+    async def _get_constants(self) -> str:
+        """Extract numeric constants and magic numbers from current function"""
+        if not self.current_session_id:
+            return "No active session"
+        
+        context = function_context_service.get_context_for_session(
+            self.current_session_id,
+            {"assembly": True, "pseudocode": True}
+        )
+        
+        if not context:
+            return "Function context not available"
+        
+        constants = set()
+        import re
+        
+        # Extract constants from assembly instructions
+        if "assembly" in context and context["assembly"]:
+            for instr in context["assembly"]:
+                operands = instr.get('operands', '')
+                
+                # Find hex constants (0x...)
+                hex_matches = re.findall(r'0x[0-9a-fA-F]+', operands)
+                constants.update(hex_matches)
+                
+                # Find decimal constants in operands (large numbers likely significant)
+                decimal_matches = re.findall(r'\b(?<!0x)(?<![a-fA-F])[0-9]{4,}\b', operands)
+                constants.update(decimal_matches)
+                
+                # Find immediate values with specific prefixes
+                immediate_matches = re.findall(r'[#$]\w+', operands)
+                constants.update(immediate_matches)
+        
+        # Extract constants from pseudocode
+        if "pseudocode" in context and context["pseudocode"]:
+            pseudocode = context["pseudocode"]
+            
+            # Find hex constants in pseudocode
+            hex_in_pseudo = re.findall(r'0x[0-9a-fA-F]+', pseudocode)
+            constants.update(hex_in_pseudo)
+            
+            # Find large decimal numbers (likely significant constants)
+            decimal_in_pseudo = re.findall(r'\b[0-9]{4,}\b', pseudocode)
+            constants.update(decimal_in_pseudo)
+            
+            # Find quoted numeric strings that might be significant
+            quoted_nums = re.findall(r'"[0-9a-fA-F]{4,}"', pseudocode)
+            constants.update(quoted_nums)
+        
+        # Filter and categorize constants
+        hex_constants = []
+        decimal_constants = []
+        special_constants = []
+        
+        for const in constants:
+            if const.startswith('0x') or const.startswith('0X'):
+                # Analyze hex constants
+                try:
+                    value = int(const, 16)
+                    # Check for well-known magic numbers
+                    if const.lower() in ['0x5a4d', '0x4d5a']:  # PE signature
+                        special_constants.append(f"{const} (PE signature 'MZ')")
+                    elif const.lower() in ['0x00004550', '0x50450000']:  # PE header
+                        special_constants.append(f"{const} (PE header 'PE')")
+                    elif const.lower() in ['0xdeadbeef', '0xbeefdead']:
+                        special_constants.append(f"{const} (Debug marker)")
+                    elif const.lower() in ['0xcafebabe', '0xbabecafe']:
+                        special_constants.append(f"{const} (Java class file)")
+                    elif const.lower() in ['0xfeedfeed', '0xfeedface']:
+                        special_constants.append(f"{const} (Mach-O signature)")
+                    elif value == 0xFFFFFFFF or value == 0xFFFF:
+                        special_constants.append(f"{const} (Max value marker)")
+                    elif 0x100 <= value <= 0xFFFF and (value & 0xFF) == 0:
+                        special_constants.append(f"{const} (Possible size/offset)")
+                    else:
+                        hex_constants.append(const)
+                except ValueError:
+                    hex_constants.append(const)
+            elif const.startswith('#') or const.startswith('$'):
+                special_constants.append(f"{const} (Immediate value)")
+            elif const.startswith('"') and const.endswith('"'):
+                special_constants.append(f"{const} (Numeric string)")
+            else:
+                try:
+                    value = int(const)
+                    # Analyze decimal constants for significance
+                    if value in [80, 443, 21, 22, 23, 25, 53, 110, 995]:  # Common ports
+                        special_constants.append(f"{const} (Network port)")
+                    elif value in [1024, 2048, 4096, 8192, 16384]:  # Powers of 2
+                        special_constants.append(f"{const} (Buffer size)")
+                    elif 1000000 <= value <= 999999999:  # Large numbers
+                        special_constants.append(f"{const} (Large numeric constant)")
+                    elif value in [256, 512, 768, 1024]:  # Common sizes
+                        special_constants.append(f"{const} (Possible buffer/array size)")
+                    else:
+                        decimal_constants.append(const)
+                except ValueError:
+                    decimal_constants.append(const)
+        
+        # Build result
+        result = f"Constants in current function:\n\n"
+        
+        if special_constants:
+            result += f"Significant Constants ({len(special_constants)}):\n"
+            for const in sorted(special_constants)[:15]:
+                result += f"- {const}\n"
+            if len(special_constants) > 15:
+                result += f"... and {len(special_constants) - 15} more significant constants\n"
+            result += "\n"
+        
+        if hex_constants:
+            result += f"Hex Constants ({len(hex_constants)}):\n"
+            for const in sorted(hex_constants, key=lambda x: int(x, 16))[:10]:
+                try:
+                    decimal_val = int(const, 16)
+                    result += f"- {const} (decimal: {decimal_val})\n"
+                except ValueError:
+                    result += f"- {const}\n"
+            if len(hex_constants) > 10:
+                result += f"... and {len(hex_constants) - 10} more hex constants\n"
+            result += "\n"
+        
+        if decimal_constants:
+            result += f"Decimal Constants ({len(decimal_constants)}):\n"
+            for const in sorted(decimal_constants, key=lambda x: int(x) if x.isdigit() else 0)[:10]:
+                try:
+                    hex_val = hex(int(const))
+                    result += f"- {const} (hex: {hex_val})\n"
+                except ValueError:
+                    result += f"- {const}\n"
+            if len(decimal_constants) > 10:
+                result += f"... and {len(decimal_constants) - 10} more decimal constants\n"
+        
+        if not special_constants and not hex_constants and not decimal_constants:
+            result += "No significant constants found in current function.\n"
+            result += "This could indicate:\n"
+            result += "- Function uses only variables and parameters\n"
+            result += "- Constants are defined elsewhere (global scope)\n"
+            result += "- Very simple function with minimal hardcoded values"
+        
+        return result
 
-# Global instance
+
+# Create global instance
 ai_tools_service = AIToolsService() 

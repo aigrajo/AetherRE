@@ -385,7 +385,11 @@ async def stream_chat_response(message: str, session_id: Optional[str] = None,
         system_message += "- get_xrefs: Get cross-references for CURRENT function\n"
         system_message += "- get_strings: Get strings for CURRENT function\n"
         system_message += "- search_functions: Search for functions by name across entire binary\n"
-        system_message += "- jump_to_function: Switch to analyze a different function (use address or name)\n\n"
+        system_message += "- jump_to_function: Switch to analyze a different function (use address or name)\n"
+        system_message += "- get_imports: Get imported functions and libraries for entire binary\n"
+        system_message += "- search_binary: Search for strings, constants, or patterns across binary (query, search_type)\n"
+        system_message += "- analyze_address: Get information about what exists at specific address (address)\n"
+        system_message += "- get_constants: Extract numeric constants and magic numbers from current function\n\n"
         system_message += "REMEMBER: After jump_to_function, the 'current function' changes, so get_pseudocode will show the NEW function's code."
         
         # Add function context if available for tool usage
