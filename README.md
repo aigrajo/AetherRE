@@ -264,5 +264,3 @@ If you encounter issues during setup:
 - [Monaco Editor](https://microsoft.github.io/monaco-editor/) - Code editor component
 - [OpenAI](https://openai.com/) - AI-powered analysis capabilities
 - [D3.js](https://d3js.org/) - Control flow graph visualization
-- [Python](https://www.python.org/) - Backend programming language
-- [Node.js](https://nodejs.org/) - JavaScript runtime for frontend development

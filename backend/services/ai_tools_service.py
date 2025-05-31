@@ -751,7 +751,7 @@ class AIToolsService:
                             break
         
         if "✓" not in result:
-            result += "❌ Address not found in available function data.\n"
+            result += "= Address not found in available function data.\n"
             result += "This could be:\n"
             result += "- Data section address\n"
             result += "- External library address\n"
