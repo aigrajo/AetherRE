@@ -211,25 +211,50 @@ If you encounter issues during setup:
 
 ### Features
 
-- Modern Electron-based GUI 
-- AI-powered analysis assistant
-- Real-time binary analysis with Ghidra
-- Cross-references
-- String and data reference analysis
-- Variable and type analysis
-- Assembly and pseudocode views
+#### **Core Analysis Engine**
+- **Ghidra Integration**: Automated binary analysis using Ghidra's headless mode
+- **Multi-format Support**: Analyze PE executables, DLLs, ELF binaries, and raw binaries
+- **Function Extraction**: Automatic function discovery, decompilation, and metadata extraction
+- **Real-time Processing**: Stream analysis results as they become available
 
-### Contributing
+#### **AI-Powered Assistant**
+- **Intelligent Analysis**: OpenAI-powered reverse engineering assistant with specialized tools
+- **Context-Aware Chat**: AI maintains current function context and binary state
+- **Smart Tool Selection**: Automatically chooses appropriate analysis tools based on user queries
+- **11 Specialized AI Tools**:
+  - `get_pseudocode` - Retrieve decompiled code for current function
+  - `get_assembly` - Get assembly instructions with operand details
+  - `get_variables` - Extract local variables and their types
+  - `get_xrefs` - Analyze cross-references (incoming/outgoing calls)
+  - `get_strings` - Find strings and constants in current function
+  - `search_functions` - Search functions by name across entire binary
+  - `jump_to_function` - Navigate between functions by name or address
+  - `get_imports` - Analyze imported libraries and external functions
+  - `search_binary` - Search for patterns, strings, or constants globally
+  - `analyze_address` - Get detailed information about specific memory addresses
+  - `get_constants` - Extract numeric constants and magic numbers
 
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+#### **Project Management**
+- **Session Persistence**: Maintain analysis state across application restarts
+- **Project Organization**: Group related binaries and analysis sessions
+- **Export Capabilities**: Save analysis results in structured JSON format
+- **File History**: Track recently analyzed files and quick reload
+
+#### **Annotation System**
+- **Function Renaming**: Rename functions with validation and conflict detection
+- **Variable Management**: Rename and organize local variables
+- **Notes Integration**: Add notes to functions and analysis sessions
+- **Tagging System**: Organize functions with custom tags and categories
+
+#### **Cross-Reference Analysis**
+- **Incoming Calls**: Track which functions call the current function
+- **Outgoing Calls**: Analyze functions called by current function
+- **Address Resolution**: Resolve function names and addresses automatically
+- **Context Information**: Show call context and instruction offsets
 
 ### License
 
-MIT License
+[MIT License](https://opensource.org/licenses/MIT)
 
 ### Acknowledgments
 
@@ -237,3 +262,7 @@ MIT License
 - [Electron](https://www.electronjs.org/) - Desktop application framework
 - [FastAPI](https://fastapi.tiangolo.com/) - Backend API framework
 - [Monaco Editor](https://microsoft.github.io/monaco-editor/) - Code editor component
+- [OpenAI](https://openai.com/) - AI-powered analysis capabilities
+- [D3.js](https://d3js.org/) - Control flow graph visualization
+- [Python](https://www.python.org/) - Backend programming language
+- [Node.js](https://nodejs.org/) - JavaScript runtime for frontend development
