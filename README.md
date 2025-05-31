@@ -53,7 +53,7 @@ The setup script will automatically check for and verify these requirements:
    - Launch the Electron GUI
    - Set up the AI assistant
 
-   To analyze a binary file:
+   To analyze a binary file through the command line:
    ```sh
    run_aetherre.bat path\to\binary.exe
    ```
